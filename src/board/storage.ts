@@ -13,6 +13,8 @@ export type Board = BoardMeta & {
   files: BinaryFiles;
   /** The note for each step: [0] = the introduction, [n] = step n. */
   notes: string[];
+  /** The art style chosen for this board (learn/styles.ts). */
+  style?: string;
 };
 
 const DB = 'learning-board';
@@ -87,13 +89,13 @@ export function blankBoard(name = 'Untitled board'): Board {
 /** A board as a .excalidraw file, with the learning notes alongside (other apps simply ignore them). */
 export function boardToFile(board: Board): Blob {
   const base = JSON.parse(serializeAsJSON(board.elements as never, board.appState as Partial<AppState> as never, board.files, 'local'));
-  base.learningBoard = { name: board.name, notes: board.notes };
+  base.learningBoard = { name: board.name, notes: board.notes, style: board.style };
   return new Blob([JSON.stringify(base, null, 2)], { type: 'application/json' });
 }
 
 export async function boardFromFile(file: File): Promise<Board> {
   const text = await file.text();
-  let extra: { name?: string; notes?: string[] } = {};
+  let extra: { name?: string; notes?: string[]; style?: string } = {};
   try { extra = JSON.parse(text)?.learningBoard ?? {}; } catch { /* not ours: fine */ }
   const scene = await loadFromBlob(new Blob([text], { type: 'application/json' }), null, null);
   const b = blankBoard(extra.name || file.name.replace(/\.(excalidraw|json)$/i, '') || 'Imported board');
@@ -103,6 +105,7 @@ export async function boardFromFile(file: File): Promise<Board> {
     appState: { viewBackgroundColor: scene.appState.viewBackgroundColor, gridModeEnabled: scene.appState.gridModeEnabled },
     files: scene.files ?? {},
     notes: Array.isArray(extra.notes) ? extra.notes.map(String) : [],
+    style: typeof extra.style === 'string' ? extra.style : undefined,
   };
 }
 

@@ -8,7 +8,7 @@ import { type El, edgePoint } from './elements';
 
 export type LessonRow = { id: string; title?: string; error?: string; updatedAt?: number };
 type Node = { id: string; label?: string; sub?: string; col?: number; row?: number; kind?: string };
-type Arrow = { id?: string; from: string; to: string; label?: string; dashed?: boolean };
+type Arrow = { id?: string; from: string; to: string; label?: string; dashed?: boolean; bend?: number };
 type Step = { say?: string; show?: string[]; flow?: string[]; cross?: string[]; ok?: string[] };
 export type Lesson = { title?: string; oneLine?: string; nodes?: Node[]; arrows?: Arrow[]; steps?: Step[] };
 
@@ -29,15 +29,20 @@ export async function fetchLesson(id: string): Promise<Lesson> {
   return JSON.parse(await r.text());
 }
 
-const KIND: Record<string, { type: 'rectangle' | 'ellipse' | 'diamond'; w: number; h: number; bg: string; stroke: string }> = {
-  server: { type: 'rectangle', w: 230, h: 110, bg: '#e7f5ff', stroke: '#1971c2' },
-  database: { type: 'ellipse', w: 230, h: 120, bg: '#ebfbee', stroke: '#2f9e44' },
-  phone: { type: 'rectangle', w: 150, h: 170, bg: '#f3f0ff', stroke: '#6741d9' },
-  person: { type: 'ellipse', w: 170, h: 120, bg: '#fff4e6', stroke: '#e8590c' },
-  cloud: { type: 'ellipse', w: 240, h: 120, bg: '#f8f9fa', stroke: '#495057' },
-  note: { type: 'rectangle', w: 240, h: 130, bg: '#fff9db', stroke: '#e67700' },
-  switch: { type: 'diamond', w: 240, h: 150, bg: '#fff0f6', stroke: '#c2255c' },
+// The lessons' look (the Sketch style): rough hand-drawn lines, the old player's soft fills, handwriting,
+// and a small picture for each kind of box.
+const KIND: Record<string, { type: 'rectangle' | 'ellipse' | 'diamond'; w: number; h: number; bg: string; icon: string }> = {
+  server: { type: 'rectangle', w: 230, h: 110, bg: '#eef3fb', icon: '🖥️' },
+  database: { type: 'ellipse', w: 240, h: 125, bg: '#edf6ef', icon: '🗄️' },
+  phone: { type: 'rectangle', w: 160, h: 170, bg: '#f3effa', icon: '📱' },
+  person: { type: 'ellipse', w: 180, h: 125, bg: '#fbf0e6', icon: '🙂' },
+  cloud: { type: 'ellipse', w: 250, h: 125, bg: '#eef6fb', icon: '☁️' },
+  note: { type: 'rectangle', w: 240, h: 130, bg: '#fff1a8', icon: '📝' },
+  switch: { type: 'diamond', w: 250, h: 160, bg: '#fbf0e6', icon: '🔀' },
 };
+const INK = '#1f2429';
+export const LESSON_STYLE = 'sketch';
+export const LESSON_PAPER = '#fdfdfa';
 
 /** Text is measured when it is made: the handwriting font must be loaded first, or words are cut off. */
 export async function fontsReady() {
@@ -71,7 +76,7 @@ export function lessonToBoard(lesson: Lesson): { elements: El[]; notes: string[]
   const boxes = new Map<string, El>(); // where each box sits, to start and end arrows on their outlines
   if (lesson.title) {
     skeleton.push({
-      type: 'text', x: 60, y: 0, text: lesson.title, fontSize: 36, fontFamily: FONT_FAMILY.Excalifont, strokeColor: '#1e1e1e',
+      type: 'text', x: 60, y: 0, text: lesson.title, fontSize: 38, fontFamily: FONT_FAMILY.Excalifont, strokeColor: INK,
     });
   }
   for (const n of nodes) {
@@ -80,14 +85,14 @@ export function lessonToBoard(lesson: Lesson): { elements: El[]; notes: string[]
     let row = Math.max(0, Math.min(3, Math.round(n.row ?? 0)));
     while (used.has(`${col},${row}`) && col < 5) col++;
     used.add(`${col},${row}`);
-    const cx = 160 + col * 300, cy = 160 + row * 220;
-    const text = n.sub ? `${n.label ?? n.id}\n${n.sub}` : n.label ?? n.id;
+    const cx = 160 + col * 350, cy = 170 + row * 240;
+    const text = `${k.icon} ${n.label ?? n.id}${n.sub ? `\n${n.sub}` : ''}`;
     boxes.set(n.id, { type: k.type, x: cx - k.w / 2, y: cy - k.h / 2, width: k.w, height: k.h, angle: 0 } as unknown as El);
     skeleton.push({
       type: k.type, id: n.id, x: cx - k.w / 2, y: cy - k.h / 2, width: k.w, height: k.h,
-      backgroundColor: k.bg, fillStyle: 'solid', strokeColor: k.stroke, strokeWidth: 2, roughness: 0,
+      backgroundColor: k.bg, fillStyle: 'solid', strokeColor: INK, strokeWidth: 2, roughness: 1,
       roundness: k.type === 'rectangle' ? { type: ROUNDNESS.ADAPTIVE_RADIUS } : null,
-      label: { text, fontSize: 18, fontFamily: FONT_FAMILY.Excalifont },
+      label: { text, fontSize: 19, fontFamily: FONT_FAMILY.Excalifont, strokeColor: INK },
       customData: learning(stepFor(n.id), undefined, marks.get(n.id)),
     });
   }
@@ -97,13 +102,22 @@ export function lessonToBoard(lesson: Lesson): { elements: El[]; notes: string[]
     const s = Math.max(stepFor(id), stepFor(a.from), stepFor(a.to));
     const from = boxes.get(a.from)!, to = boxes.get(a.to)!;
     const centre = (b: El) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
-    const p = edgePoint(from, centre(to), 8), q = edgePoint(to, centre(from), 8);
+    // Two arrows between the same two boxes (there and back) curve apart, each to its own right, so
+    // neither the lines nor their labels sit on top of each other. A lesson's own `bend` wins.
+    const twoWay = arrows.some((o) => o !== a && ((o.from === a.to && o.to === a.from) || (o.from === a.from && o.to === a.to)));
+    const bend = typeof a.bend === 'number' ? Math.max(-220, Math.min(220, a.bend)) : twoWay ? 55 : 0;
+    const c1 = centre(from), c2 = centre(to);
+    const len = Math.hypot(c2.x - c1.x, c2.y - c1.y) || 1;
+    const nx = -(c2.y - c1.y) / len, ny = (c2.x - c1.x) / len; // the right-hand side of the direction of travel
+    const mid = { x: (c1.x + c2.x) / 2 + nx * bend, y: (c1.y + c2.y) / 2 + ny * bend };
+    const p = edgePoint(from, bend ? mid : c2, 8), q = edgePoint(to, bend ? mid : c1, 8);
+    const points = bend ? [[0, 0], [mid.x - p.x, mid.y - p.y], [q.x - p.x, q.y - p.y]] : [[0, 0], [q.x - p.x, q.y - p.y]];
     skeleton.push({
-      type: 'arrow', id, x: p.x, y: p.y, points: [[0, 0], [q.x - p.x, q.y - p.y]],
-      strokeColor: '#343a40', strokeWidth: 2, roughness: 0,
+      type: 'arrow', id, x: p.x, y: p.y, points, roundness: bend ? { type: ROUNDNESS.PROPORTIONAL_RADIUS } : null,
+      strokeColor: INK, strokeWidth: 2, roughness: 1,
       strokeStyle: a.dashed ? 'dashed' : 'solid', endArrowhead: 'arrow',
       start: { id: a.from }, end: { id: a.to },
-      label: a.label ? { text: a.label, fontSize: 16, fontFamily: FONT_FAMILY.Excalifont } : undefined,
+      label: a.label ? { text: a.label, fontSize: 17, fontFamily: FONT_FAMILY.Excalifont, strokeColor: '#5a636c' } : undefined,
       customData: learning(s, flowAt.get(id), undefined),
     });
   });

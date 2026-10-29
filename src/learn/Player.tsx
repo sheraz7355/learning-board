@@ -7,7 +7,7 @@ import { CaptureUpdateAction, convertToExcalidrawElements, Excalidraw, ROUNDNESS
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { type El, absPoints, boundsOf, hasPoints } from '../board/elements';
 import { FlowLayer } from './FlowLayer';
-import { isCover, maxStep, stepOf } from './steps';
+import { isCover, lastStep, stepOf } from './steps';
 
 type Props = {
   elements: readonly El[];
@@ -15,6 +15,7 @@ type Props = {
   notes: readonly string[];
   background: string;
   dark: boolean;
+  flowColour: string;
   startStep?: number;
   onClose: () => void;
 };
@@ -26,7 +27,7 @@ function boxOf(el: El) {
   return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height, w: el.width, h: el.height };
 }
 
-export function Player({ elements, files, notes, background, dark, startStep, onClose }: Props) {
+export function Player({ elements, files, notes, background, dark, flowColour, startStep, onClose }: Props) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const byId = useMemo(() => new Map(elements.map((e) => [e.id, e])), [elements]);
 
@@ -47,7 +48,7 @@ export function Player({ elements, files, notes, background, dark, startStep, on
     return m;
   }, [elements, byId]);
 
-  const last = maxStep(elements);
+  const last = lastStep(elements, notes);
   const first = elements.some((e) => (eff.get(e.id) ?? 0) === 0) || notes[0] ? 0 : 1;
   const [step, setStep] = useState(() => Math.min(Math.max(startStep ?? first, first), last));
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
@@ -136,7 +137,7 @@ export function Player({ elements, files, notes, background, dark, startStep, on
           initialData={{ elements: scene, appState: { viewBackgroundColor: background }, files, scrollToContent: true }}
           UIOptions={{ canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false } }}
         />
-        <FlowLayer api={api} mode="play" step={step} pulseIds={pulse} dark={dark} />
+        <FlowLayer api={api} mode="play" step={step} pulseIds={pulse} flowColour={flowColour} />
       </div>
       <div className="lb-player-bar">
         <button type="button" className="lb-btn" onClick={() => setStep((s) => Math.max(first, s - 1))} disabled={step <= first} aria-label="Back (←)">←</button>

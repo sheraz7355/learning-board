@@ -32,7 +32,7 @@ const styleOf = (s: El) => ({
   fillStyle: 'solid' as const,
   strokeWidth: Math.max(1, Math.min(4, Math.round(s.strokeWidth))),
   strokeStyle: 'solid' as const,
-  roughness: 0, // crisp: the point of perfecting is a clean shape
+  roughness: 0, // replaced below by the board's style (perfectStrokes)
   opacity: s.opacity,
   groupIds: s.groupIds,
   frameId: s.frameId,
@@ -82,7 +82,8 @@ export function perfectStrokes(api: API, ids: Iterable<string>, opts: { select?:
     const pts = absPoints(stroke);
     const shape = recognize(pts);
     if (!shape) continue;
-    const style = styleOf(stroke);
+    // The perfect shape is drawn in the board's style: Sketch keeps a hand-drawn line, Clean is crisp.
+    const style = { ...styleOf(stroke), roughness: api.getAppState().currentItemRoughness };
 
     if (shape.kind === 'line' || shape.kind === 'curve') {
       const slack = 14 / zoom;

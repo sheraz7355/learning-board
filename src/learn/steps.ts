@@ -25,6 +25,16 @@ export const markAt = (el: El, step: number): 'ok' | 'cross' | null => {
 
 export const maxStep = (els: readonly El[]) => els.reduce((m, e) => Math.max(m, stepOf(e)), 0);
 
+/** The last step: steps that only say something, or only tick, cross or flow, count too. */
+export function lastStep(els: readonly El[], notes: readonly string[]): number {
+  let last = Math.max(maxStep(els), notes.length - 1);
+  for (const e of els) {
+    for (const k of Object.keys(e.customData?.markAt ?? {})) last = Math.max(last, Number(k) || 0);
+    for (const s of (Array.isArray(e.customData?.flowAt) ? e.customData!.flowAt : [])) last = Math.max(last, Number(s) || 0);
+  }
+  return last;
+}
+
 /** The ids plus what belongs with them: a box's own text, an arrow's label, a text's box, group-mates. */
 export function withAttached(scene: readonly El[], ids: Iterable<string>): Set<string> {
   const out = new Set(ids);

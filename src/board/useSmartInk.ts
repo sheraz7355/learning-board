@@ -11,7 +11,7 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { perfectStrokes, type PerfectResult } from './inkActions';
 import { distToElementLine } from './elements';
 
-const HOLD_MS = 420;
+const HOLD_MS = 250; // short: a brief pause at the end of a stroke is enough
 
 type Opts = {
   hold: boolean;
@@ -43,7 +43,11 @@ export function useSmartInk(api: ExcalidrawImperativeAPI | null, opts: Opts) {
       if (st.timer) clearTimeout(st.timer);
       if (o.current.hold) {
         st.timer = setTimeout(() => {
-          if (st.down) { st.armed = true; showRing(st.last.x, st.last.y); }
+          if (st.down) {
+            st.armed = true;
+            showRing(st.last.x, st.last.y);
+            try { navigator.vibrate?.(10); } catch { /* no vibration on this device */ }
+          }
         }, HOLD_MS);
       }
     }

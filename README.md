@@ -34,15 +34,16 @@ npm start
 
 | Do this | What happens |
 |---|---|
-| Pen (**P** or 7): draw a shape, then **hold still for a moment** before letting go | A ring appears, and on release the stroke becomes a perfect circle, ellipse, rectangle, square, triangle, diamond or straight line |
+| Pen (**P** or 7): draw a shape, then **pause a moment** before letting go | A ring buzzes, and on release the stroke snaps (with a little shake) into a perfect circle, ellipse, rectangle, square, triangle, diamond or straight line |
 | **Double-click** a stroke | Perfects it afterwards |
 | Draw a line **from one shape to another** (and hold) | They get an arrow that follows them when they move |
 | Select handwriting → **Aa To text** (Alt+W) | Becomes neat text; other readings are offered next to it. Needs internet |
 | Select handwriting → **Straighten** (Alt+L) | Keeps your handwriting, lines it up level and smooths it |
-| Select an arrow → **Flow** (Alt+F) | Dots flow along it |
+| Select an arrow → **Flow** (Alt+F) | A glowing dot travels along it, and on through arrows that continue one another. Pick a kind (**Dot**, **Stream**, **Comet**, **Ants**, **Wave**) and a colour |
+| **🎨 Style** (top right) | Restyles the whole board: **Sketch** (hand-drawn, the lessons' look), **Chalkboard**, **Clean**, **Marker**, **Blueprint**, **Notebook** |
 | Select things → **Next step** (Alt+N) | They appear one step later in Play |
 | Select a box → **? Quiz** (Alt+Q) | In Play it hides under a card until clicked |
-| **Steps** (top right) | Write what to say at each step |
+| **Steps** (top right) | Write what to say at each step; **+ Add a step** for a step that only says something |
 | **▶ Play** (Alt+Enter) | Step by step: → or Space next, ← back, **S** spotlight (dims earlier steps), Esc to close |
 | **K** | Laser pointer, for pointing while you explain |
 | Ctrl/⌘ + Z | Undo. A perfected shape goes back to your original ink |

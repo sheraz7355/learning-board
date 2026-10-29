@@ -9,14 +9,16 @@ import {
   blankBoard, boardFromFile, boardToFile, deleteBoard, download, getBoard, lastBoardId, listBoards, rememberLast, saveBoard,
   type Board, type BoardMeta,
 } from './board/storage';
-import { fetchLesson, fetchLessons, fontsReady, lessonToBoard, type LessonRow } from './board/lessons';
-import { FlowLayer } from './learn/FlowLayer';
+import { fetchLesson, fetchLessons, fontsReady, LESSON_PAPER, LESSON_STYLE, lessonToBoard, type LessonRow } from './board/lessons';
+import { FlowLayer, flowKindOf, type FlowKind } from './learn/FlowLayer';
+import { applyStyle, styleById } from './learn/styles';
 import { Player } from './learn/Player';
-import { flowsAlways, isCover, maxStep, setLearning, stepOf, withAttached } from './learn/steps';
-import { BoardsPanel, HelpPanel, StepsPanel } from './ui/Panels';
+import { flowsAlways, isCover, lastStep, maxStep, setLearning, stepOf, withAttached } from './learn/steps';
+import { BoardsPanel, HelpPanel, StepsPanel, StylePanel } from './ui/Panels';
 import { SmartBar, type Selection } from './ui/SmartBar';
 
-type Panel = 'none' | 'boards' | 'steps' | 'help';
+type Panel = 'none' | 'boards' | 'steps' | 'help' | 'style';
+type Snap = { key: number; x: number; y: number; w: number; h: number };
 
 const pref = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch { return d; } };
 const setPref = (k: string, v: boolean) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch { /* private mode */ } };
@@ -35,6 +37,8 @@ export default function App() {
   const [auto, setAuto] = useState(() => pref('lb:auto', false));
   const [hold, setHold] = useState(() => pref('lb:hold', true));
   const [stepInfo, setStepInfo] = useState<{ last: number; counts: number[] }>({ last: 0, counts: [] });
+  const [snaps, setSnaps] = useState<Snap[]>([]);
+  const [styling, setStyling] = useState(false);
 
   const boardRef = useRef<Board | null>(null);
   boardRef.current = board;
@@ -52,7 +56,7 @@ export default function App() {
         b = all.length ? await getBoard(all[0].id) : null;
       }
       if (!b) {
-        b = blankBoard('My first board');
+        b = { ...blankBoard('My first board'), style: LESSON_STYLE, appState: { viewBackgroundColor: LESSON_PAPER } };
         await saveBoard(b);
       }
       rememberLast(b.id);
@@ -120,7 +124,7 @@ export default function App() {
     if (lastVersion.current !== -1 && v !== lastVersion.current) scheduleSave();
     if (v !== lastVersion.current) {
       lastVersion.current = v;
-      const last = maxStep(elements);
+      const last = lastStep(elements, boardRef.current?.notes ?? []);
       const counts = Array.from({ length: last + 1 }, () => 0);
       for (const e of elements) if (!(e.type === 'text' && e.containerId)) counts[stepOf(e)]++;
       setStepInfo((s) => (s.last === last && s.counts.join() === counts.join() ? s : { last, counts }));
@@ -144,14 +148,33 @@ export default function App() {
       shapes: shapes.length,
       step: steps.size === 1 ? [...steps][0] : steps.size === 0 ? 0 : 'mixed',
       flow: arrows.length > 0 && arrows.every(flowsAlways),
+      flowKind: arrows.length ? (new Set(arrows.map(flowKindOf)).size === 1 ? flowKindOf(arrows[0]) : null) : null,
+      flowColour: arrows.length && new Set(arrows.map((e) => e.customData?.flowColor ?? '')).size === 1 ? (arrows[0].customData?.flowColor ?? null) : null,
       cover: shapes.length > 0 && shapes.every(isCover),
     });
   }, [scheduleSave]);
 
   const onPerfected = useCallback((r: PerfectResult) => {
+    if (api && r.newIds.length) {
+      const st = api.getAppState();
+      const z = st.zoom.value;
+      const ids = new Set(r.newIds);
+      const fresh: Snap[] = api.getSceneElements().filter((e) => ids.has(e.id) && e.type !== 'arrow').map((e) => ({
+        key: Math.random(),
+        x: (e.x + st.scrollX) * z + st.offsetLeft - 6,
+        y: (e.y + st.scrollY) * z + st.offsetTop - 6,
+        w: Math.abs(e.width) * z + 12,
+        h: Math.abs(e.height) * z + 12,
+      }));
+      if (fresh.length) {
+        setSnaps((s) => [...s, ...fresh]);
+        setTimeout(() => setSnaps((s) => s.filter((x) => !fresh.includes(x))), 600);
+      }
+      try { navigator.vibrate?.([14, 40, 10]); } catch { /* no vibration on this device */ }
+    }
     const k = r.kinds[0];
     toast(r.kinds.length > 1 ? `${r.kinds.length} shapes perfected` : k === 'arrow' ? 'Connected ✓  (Ctrl/⌘+Z to undo)' : `${k[0].toUpperCase()}${k.slice(1)} ✓  (Ctrl/⌘+Z to undo)`);
-  }, [toast]);
+  }, [toast, api]);
 
   const ink = useSmartInk(api, { hold, auto, onPerfected });
 
@@ -190,9 +213,39 @@ export default function App() {
     const els = api.getSceneElements().filter((e) => ids.includes(e.id) && (e.type === 'arrow' || e.type === 'line'));
     if (!els.length) return toast('Select an arrow first');
     const on = !els.every(flowsAlways);
-    setLearning(api, els.map((e) => e.id), { flow: on ? true : undefined });
-    toast(on ? 'Flowing ● ● →' : 'Flow off');
+    setLearning(api, els.map((e) => e.id), on ? { flow: true } : { flow: undefined });
+    toast(on ? 'Flowing ● →  (pick a kind and colour in the bar)' : 'Flow off');
   }, [api, selected, toast]);
+
+  const doFlowKind = useCallback((k: FlowKind) => {
+    if (!api) return;
+    const ids = selected();
+    const arrows = api.getSceneElements().filter((e) => ids.includes(e.id) && (e.type === 'arrow' || e.type === 'line')).map((e) => e.id);
+    setLearning(api, arrows, { flow: true, flowStyle: k });
+  }, [api, selected]);
+
+  const doFlowColour = useCallback((c: string) => {
+    if (!api) return;
+    const ids = selected();
+    const arrows = api.getSceneElements().filter((e) => ids.includes(e.id) && (e.type === 'arrow' || e.type === 'line')).map((e) => e.id);
+    setLearning(api, arrows, { flow: true, flowColor: c });
+  }, [api, selected]);
+
+  const pickStyle = useCallback(async (id: string) => {
+    if (!api || !boardRef.current || styling) return;
+    setStyling(true);
+    try {
+      const st = styleById(id);
+      await applyStyle(api, st);
+      const b = { ...boardRef.current, style: st.id };
+      boardRef.current = b;
+      setBoard(b);
+      await flushSave();
+      toast(`${st.name} style  (Ctrl/⌘+Z to undo)`);
+    } finally {
+      setStyling(false);
+    }
+  }, [api, styling, flushSave, toast]);
 
   const doCover = useCallback(() => {
     if (!api) return;
@@ -314,8 +367,11 @@ export default function App() {
     try { const b = await boardFromFile(f); await saveBoard(b); await open(b); setPanel('none'); }
     catch { toast('That file is not a board'); }
   }, [open, toast]);
-  const openLesson = useCallback(async (id: string) => {
+  const openLesson = useCallback(async (id: string, rebuild = false) => {
     try {
+      if (rebuild) {
+        for (const b of (await listBoards()).filter((x) => x.lessonId === id)) await deleteBoard(b.id);
+      }
       // A lesson opened before keeps your edits: open that board again.
       const existing = (await listBoards()).find((b) => b.lessonId === id);
       const saved = existing ? await getBoard(existing.id) : null;
@@ -323,7 +379,7 @@ export default function App() {
       const lesson = await fetchLesson(id);
       await fontsReady();
       const { elements, notes } = lessonToBoard(lesson);
-      const b: Board = { ...blankBoard(lesson.title || id), elements, notes, lessonId: id };
+      const b: Board = { ...blankBoard(lesson.title || id), elements, notes, lessonId: id, style: LESSON_STYLE, appState: { viewBackgroundColor: LESSON_PAPER } };
       await saveBoard(b);
       await open(b);
       setPanel('none');
@@ -351,7 +407,14 @@ export default function App() {
 
   const initialData = useMemo(() => board && ({
     elements: board.elements,
-    appState: { ...board.appState, currentItemRoughness: 0, currentItemFontFamily: 5, name: board.name },
+    appState: (() => {
+      const st = styleById(board.style);
+      return {
+        ...board.appState,
+        currentItemRoughness: st.roughness, currentItemFontFamily: st.font, currentItemStrokeWidth: st.strokeWidth,
+        currentItemStrokeColor: st.ink, currentItemFillStyle: st.fill, name: board.name,
+      };
+    })(),
     files: board.files,
     scrollToContent: true,
   }), [board?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -370,6 +433,7 @@ export default function App() {
           renderTopRightUI={() => (
             <div className="lb-top">
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'boards' ? 'none' : 'boards'))} title="Your boards and lessons (Alt+B)">☰ {board.name}</button>
+              <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'style' ? 'none' : 'style'))} title="Art style for the whole board">🎨 Style</button>
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'steps' ? 'none' : 'steps'))} title="Steps and what to say">Steps{stepInfo.last ? ` (${stepInfo.last})` : ''}</button>
               <button type="button" className="lb-btn primary" onClick={() => void play()} title="Play step by step (Alt+Enter)">▶ Play</button>
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'help' ? 'none' : 'help'))} aria-label="Help">?</button>
@@ -391,7 +455,7 @@ export default function App() {
             <WelcomeScreen.Center>
               <WelcomeScreen.Center.Heading>Learning Board</WelcomeScreen.Center.Heading>
               <div className="lb-welcome">
-                <p><b>Draw a shape with the pen (P) and hold still for a moment</b> — it becomes perfect.</p>
+                <p><b>Draw a shape with the pen (P) and pause a moment before letting go</b> — it snaps into a perfect shape.</p>
                 <p><b>Draw a line from one shape to another</b> — they get connected.</p>
                 <p><b>Select things → Next step</b>, then <b>▶ Play</b> to explain it step by step.</p>
               </div>
@@ -400,7 +464,8 @@ export default function App() {
             <WelcomeScreen.Hints.HelpHint />
           </WelcomeScreen>
         </Excalidraw>
-        <FlowLayer api={api} mode="edit" showBadges={stepInfo.last > 0} dark={dark} />
+        <FlowLayer api={api} mode="edit" showBadges={stepInfo.last > 0} flowColour={styleById(board.style).flow} />
+        {snaps.map((s) => <div key={s.key} className="lb-snap" style={{ left: s.x, top: s.y, width: s.w, height: s.h }} aria-hidden="true" />)}
         {ink.ring && <div className="lb-ring" style={{ left: ink.ring.x, top: ink.ring.y }} aria-hidden="true" />}
         {sel && !playing && (
           <SmartBar
@@ -411,6 +476,9 @@ export default function App() {
             onText={() => void doText()}
             onStraighten={doStraighten}
             onFlow={doFlow}
+            onFlowKind={doFlowKind}
+            onFlowColour={doFlowColour}
+            defaultFlowColour={styleById(board.style).flow}
             onCover={doCover}
             onStep={doStep}
             onMark={doMark}
@@ -430,6 +498,7 @@ export default function App() {
           onDownload={() => void downloadBoard()}
           onImport={(f) => void importFile(f)}
           onOpenLesson={(id) => void openLesson(id)}
+          onRebuildLesson={(id) => void openLesson(id, true)}
           onClose={() => setPanel('none')}
         />
       )}
@@ -441,8 +510,12 @@ export default function App() {
           onNote={setNote}
           onPlay={(s) => void play(s)}
           onSelect={selectStep}
+          onAdd={() => { const n = Math.max(stepInfo.last, board.notes.length - 1) + 1; setNote(n, ''); setStepInfo((s) => ({ last: n, counts: [...s.counts, 0] })); }}
           onClose={() => setPanel('none')}
         />
+      )}
+      {panel === 'style' && (
+        <StylePanel current={styleById(board.style).id} busy={styling} onPick={(id) => void pickStyle(id)} onClose={() => setPanel('none')} />
       )}
       {panel === 'help' && (
         <HelpPanel
@@ -460,6 +533,7 @@ export default function App() {
           notes={board.notes}
           background={board.appState.viewBackgroundColor ?? '#ffffff'}
           dark={dark}
+          flowColour={styleById(board.style).flow}
           startStep={playing.step}
           onClose={() => setPlaying(null)}
         />

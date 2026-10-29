@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BoardMeta } from '../board/storage';
 import type { LessonRow } from '../board/lessons';
+import { STYLES } from '../learn/styles';
 
 type BoardsProps = {
   current: { id: string; name: string };
@@ -13,6 +14,7 @@ type BoardsProps = {
   onDownload: () => void;
   onImport: (file: File) => void;
   onOpenLesson: (id: string) => void;
+  onRebuildLesson: (id: string) => void;
   onClose: () => void;
 };
 
@@ -74,6 +76,9 @@ export function BoardsPanel(p: BoardsProps) {
                   <strong>{l.title || l.id}</strong>
                   <small>{l.error ? 'has an error' : l.id}</small>
                 </button>
+                {p.boards.some((b) => b.lessonId === l.id) && (
+                  <button type="button" className="lb-icon" onClick={() => p.onRebuildLesson(l.id)} title="Rebuild this board from the lesson file (your edits to it are replaced)">↻</button>
+                )}
                 <a className="lb-icon" href={`/player/#${encodeURIComponent(l.id)}`} target="_blank" rel="noreferrer" title="Open in the lesson player">▶</a>
               </li>
             ))}
@@ -91,6 +96,7 @@ type StepsProps = {
   onNote: (step: number, text: string) => void;
   onPlay: (step: number) => void;
   onSelect: (step: number) => void;
+  onAdd: () => void;
   onClose: () => void;
 };
 
@@ -122,6 +128,7 @@ export function StepsPanel(p: StepsProps) {
           </li>
         ))}
       </ol>
+      <button type="button" className="lb-btn" style={{ marginTop: 12 }} onClick={p.onAdd} title="A step that only says something (or only ticks, crosses or flows)">+ Add a step</button>
     </aside>
   );
 }
@@ -129,12 +136,13 @@ export function StepsPanel(p: StepsProps) {
 export function HelpPanel({ onClose, auto, hold, onAuto, onHold }: { onClose: () => void; auto: boolean; hold: boolean; onAuto: (v: boolean) => void; onHold: (v: boolean) => void }) {
   const alt = navigator.platform.toLowerCase().includes('mac') ? '⌥' : 'Alt';
   const rows: [string, string][] = [
-    ['Draw with the pen (P), then hold still ½ s before letting go', 'the stroke becomes a perfect circle, ellipse, rectangle, square, triangle, diamond or line'],
+    ['Draw with the pen (P), then pause a moment before letting go', 'a ring buzzes, and the stroke snaps into a perfect circle, ellipse, rectangle, square, triangle, diamond or line'],
     ['Double-click a stroke', 'perfect it afterwards'],
     ['Draw a line from one shape to another', 'they get an arrow that stays attached when you move them'],
     [`Select handwriting → Aa To text (${alt}+W)`, 'your writing becomes neat text (needs internet)'],
     [`Select handwriting → Straighten (${alt}+L)`, 'keeps your handwriting, lines it up level and smooths it'],
-    [`Select an arrow → Flow (${alt}+F)`, 'dots flow along it, showing the direction things move'],
+    [`Select an arrow → Flow (${alt}+F)`, 'a glowing dot travels along it (and on through connected arrows); pick Dot, Stream, Comet, Ants or Wave and a colour'],
+    ['🎨 Style', 'restyle the whole board: Sketch, Chalkboard, Clean, Marker, Blueprint or Notebook'],
     [`Select things → Next step (${alt}+N)`, 'they appear one step later in Play'],
     [`Select a box → Quiz (${alt}+Q)`, 'in Play it is hidden under a card until clicked'],
     [`Play (${alt}+Enter)`, '→ / Space next, ← back, S spotlight, Esc close'],
@@ -156,5 +164,66 @@ export function HelpPanel({ onClose, auto, hold, onAuto, onHold }: { onClose: ()
       <label className="lb-check"><input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} /> Perfect every shape automatically (off keeps letters like O and l as you wrote them)</label>
       <p className="lb-hint">Boards are saved in this browser on this computer. Use Boards → Download to keep a copy or share one.</p>
     </aside>
+  );
+}
+
+export function StylePanel({ current, onPick, onClose, busy }: {
+  current: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+  busy: boolean;
+}) {
+  return (
+    <aside className="lb-panel right" aria-label="Art style">
+      <header>
+        <h2>Art style</h2>
+        <button type="button" className="lb-x" onClick={onClose} aria-label="Close">×</button>
+      </header>
+      <p className="lb-hint">Restyles the whole board — lines, fills, font, paper and the flowing dots. New drawing follows it. Ctrl/⌘+Z undoes it.</p>
+      <div className="lb-styles">
+        {STYLES.map((s) => (
+          <button key={s.id} type="button" className={`lb-style${s.id === current ? ' on' : ''}`} onClick={() => onPick(s.id)} disabled={busy}>
+            <span className="lb-style-preview" style={{ background: s.paper }}>
+              <StylePreview s={s} />
+            </span>
+            <span className="lb-style-name"><strong>{s.name}</strong><small>{s.hint}</small></span>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function StylePreview({ s }: { s: (typeof STYLES)[number] }) {
+  const id = `rough-${s.id}`;
+  const fill = s.dark ? 'rgba(255,255,255,0.10)' : '#eef3fb';
+  const pattern = s.fill === 'solid' ? fill : `url(#hatch-${s.id})`;
+  return (
+    <svg viewBox="0 0 160 74" aria-hidden="true">
+      <defs>
+        <filter id={id}>
+          <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3" />
+          <feDisplacementMap in="SourceGraphic" scale={s.roughness * 2.2} />
+        </filter>
+        <pattern id={`hatch-${s.id}`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke={s.ink} strokeOpacity="0.35" strokeWidth="1.2" />
+          {s.fill === 'cross-hatch' && <line x1="0" y1="0" x2="6" y2="0" stroke={s.ink} strokeOpacity="0.35" strokeWidth="1.2" />}
+        </pattern>
+        {s.grid && (
+          <pattern id={`grid-${s.id}`} width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M10 0 L0 0 0 10" fill="none" stroke={s.ink} strokeOpacity="0.12" strokeWidth="0.6" />
+          </pattern>
+        )}
+      </defs>
+      {s.grid && <rect width="160" height="74" fill={`url(#grid-${s.id})`} />}
+      <g filter={s.roughness ? `url(#${id})` : undefined} stroke={s.ink} strokeWidth={Math.max(1.2, s.strokeWidth * 0.8)} fill="none" strokeLinecap="round">
+        <circle cx="34" cy="37" r="20" fill={pattern} />
+        <rect x="96" y="18" width="50" height="38" rx="8" fill={pattern} />
+        <path d="M56 37 L92 37 M85 31 L93 37 L85 43" />
+      </g>
+      <circle cx="74" cy="37" r="4.5" fill={s.flow} />
+      <circle cx="74" cy="37" r="8" fill={s.flow} opacity="0.3" />
+      <text x="121" y="41" textAnchor="middle" fontSize="13" fill={s.ink} style={{ fontFamily: `"${s.fontName}", cursive` }}>Aa</text>
+    </svg>
   );
 }

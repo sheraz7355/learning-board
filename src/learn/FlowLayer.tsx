@@ -1,6 +1,10 @@
-// A see-through layer over the board that draws what moves: dots flowing along arrows, the pulse around
-// what a step just revealed, ticks and crosses, and step numbers while editing. It draws only while
-// something moves (otherwise once per scroll or change), and pauses when the window is hidden.
+// A see-through layer over the board that draws what moves:
+//  • flows along arrows, in five kinds — Dot (one bright glowing dot that eases along the arrow and travels on
+//    through arrows that continue one another, as one journey: the lessons' look), Stream (a steady line of
+//    dots), Comet (a dot with a fading tail), Ants (marching dashes) and Wave (a glowing band);
+//  • in Play: the pulse around what a step just revealed, and ticks and crosses;
+//  • while editing: step numbers.
+// It draws only while something moves (otherwise once per scroll or change) and pauses in a hidden window.
 
 import { useEffect, useRef } from 'react';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
@@ -8,17 +12,24 @@ import { type El, absPoints, boundsOf, hasPoints } from '../board/elements';
 import type { P } from '../ink/geometry';
 import { flowsAlways, flowsAt, markAt, stepOf } from './steps';
 
+export type FlowKind = 'dot' | 'stream' | 'comet' | 'ants' | 'wave';
+export const FLOW_KINDS: { id: FlowKind; name: string }[] = [
+  { id: 'dot', name: 'Dot' }, { id: 'stream', name: 'Stream' }, { id: 'comet', name: 'Comet' }, { id: 'ants', name: 'Ants' }, { id: 'wave', name: 'Wave' },
+];
+export const FLOW_COLOURS = ['#22c55e', '#3b82f6', '#f97316', '#ec4899', '#facc15', '#a855f7'];
+export const flowKindOf = (el: El): FlowKind => {
+  const k = el.customData?.flowStyle;
+  return FLOW_KINDS.some((f) => f.id === k) ? (k as FlowKind) : 'dot';
+};
+
 type Props = {
   api: ExcalidrawImperativeAPI | null;
   mode: 'edit' | 'play';
   step?: number;
   pulseIds?: ReadonlySet<string>;
   showBadges?: boolean;
-  dark: boolean;
+  flowColour: string;
 };
-
-const SPACING = 70; // board units between dots
-const SPEED = 90; // board units per second
 
 /** Points along a smooth curve through the given points (how Excalidraw draws a rounded arrow). */
 function catmull(pts: readonly P[], perSeg = 12): P[] {
@@ -40,7 +51,7 @@ function catmull(pts: readonly P[], perSeg = 12): P[] {
 function pathOf(el: El): P[] {
   let pts = absPoints(el);
   if (el.roundness && pts.length >= 3) pts = catmull(pts);
-  // Dots travel towards the arrow head (or backwards when the only head is at the start).
+  // Flows go towards the arrow head (backwards when the only head is at the start).
   if (el.type === 'arrow' && !el.endArrowhead && el.startArrowhead) pts = pts.slice().reverse();
   return pts;
 }
@@ -50,10 +61,28 @@ function boxOf(el: El) {
   return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height, w: el.width, h: el.height };
 }
 
-export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, dark }: Props) {
+/** A path on screen with its running length, and a point at any distance along it. */
+type Track = { pts: P[]; cum: number[]; len: number; sceneLen: number };
+function track(pts: P[], z: number): Track {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const len = cum[cum.length - 1];
+  return { pts, cum, len, sceneLen: len / z };
+}
+function at(t: Track, d: number): P {
+  if (d <= 0) return t.pts[0];
+  if (d >= t.len) return t.pts[t.pts.length - 1];
+  let i = 1;
+  while (i < t.cum.length - 1 && t.cum[i] < d) i++;
+  const f = (d - t.cum[i - 1]) / (t.cum[i] - t.cum[i - 1] || 1);
+  return { x: t.pts[i - 1].x + (t.pts[i].x - t.pts[i - 1].x) * f, y: t.pts[i - 1].y + (t.pts[i].y - t.pts[i - 1].y) * f };
+}
+const ease = (f: number) => (f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2);
+
+export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, flowColour }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const live = useRef({ mode, step, pulseIds, showBadges });
-  live.current = { mode, step, pulseIds, showBadges };
+  const live = useRef({ mode, step, pulseIds, showBadges, flowColour });
+  live.current = { mode, step, pulseIds, showBadges, flowColour };
 
   useEffect(() => {
     const canvas = ref.current;
@@ -74,43 +103,109 @@ export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, dark }: P
       schedule();
     };
 
+    const glowDot = (p: P, r: number, colour: string, alpha = 1) => {
+      ctx.globalAlpha = 0.28 * alpha;
+      ctx.fillStyle = colour;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.9, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = colour; ctx.shadowBlur = r * 2.2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.85 * alpha;
+      ctx.beginPath(); ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.32, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    };
+
     const draw = (now: number): boolean => {
-      const { mode: m, step: s, pulseIds: pulse, showBadges: badges } = live.current;
+      const { mode: m, step: s, pulseIds: pulse, showBadges: badges, flowColour: defColour } = live.current;
       const st = api.getAppState();
       const z = st.zoom.value;
+      const sz = Math.max(0.6, Math.min(1.6, z));
       const toV = (p: P) => ({ x: (p.x + st.scrollX) * z, y: (p.y + st.scrollY) * z });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       const els = api.getSceneElements() as readonly El[];
+      const t = now / 1000;
       let moving = false;
 
-      // Flowing dots.
-      for (const el of els) {
-        if (el.type !== 'arrow' && el.type !== 'line') continue;
-        const flows = m === 'play' ? flowsAt(el, s) : flowsAlways(el) || Array.isArray(el.customData?.flowAt);
-        if (!flows) continue;
-        const pts = pathOf(el).map(toV);
-        const seg: number[] = [0];
-        for (let i = 1; i < pts.length; i++) seg.push(seg[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
-        const len = seg[seg.length - 1];
-        if (len < 8) continue;
-        const spacing = SPACING * z;
-        const offset = reduceMotion ? spacing / 2 : ((now / 1000) * SPEED * z) % spacing;
-        const r = Math.max(3, Math.min(9, el.strokeWidth * 1.8 * z));
-        ctx.fillStyle = el.strokeColor === 'transparent' ? '#1e1e1e' : el.strokeColor;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = Math.max(1, r / 3);
-        let i = 1;
-        for (let d = offset; d < len; d += spacing) {
-          while (i < seg.length - 1 && seg[i] < d) i++;
-          const t = (d - seg[i - 1]) / (seg[i] - seg[i - 1] || 1);
-          const x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
+      // ── Flows ──────────────────────────────────────────────────────────────
+      const flowing = els.filter((el) => (el.type === 'arrow' || el.type === 'line') &&
+        (m === 'play' ? flowsAt(el, s) : flowsAlways(el) || Array.isArray(el.customData?.flowAt)));
+      // Dots and comets travel on through arrows that continue one another (a→b, then b→c): one journey.
+      const chains: El[][] = [];
+      for (const el of flowing) {
+        const k = flowKindOf(el);
+        if (k !== 'dot' && k !== 'comet') { chains.push([el]); continue; }
+        const from = el.type === 'arrow' ? el.startBinding?.elementId : undefined;
+        const chain = from && chains.find((c) => {
+          const last = c[c.length - 1];
+          return flowKindOf(last) === k && last.type === 'arrow' && last.endBinding?.elementId === from;
+        });
+        if (chain) chain.push(el); else chains.push([el]);
+      }
+      for (const chain of chains) {
+        const kind = flowKindOf(chain[0]);
+        const colour = (chain[0].customData?.flowColor as string) || defColour;
+        const tracks = chain.map((el) => track(pathOf(el).map(toV), z)).filter((tr) => tr.len > 6);
+        if (!tracks.length) continue;
+        if (reduceMotion) { glowDot(at(tracks[0], tracks[0].len / 2), 6.5 * sz, colour); continue; }
+        moving = true;
+
+        if (kind === 'dot' || kind === 'comet') {
+          const durs = tracks.map((tr) => Math.max(0.8, Math.min(1.8, tr.sceneLen / 230)));
+          const period = durs.reduce((a, b) => a + b, 0) + 0.7;
+          let u = t % period;
+          for (let i = 0; i < tracks.length; i++) {
+            if (u > durs[i]) { u -= durs[i]; continue; }
+            const f = u / durs[i];
+            const tr = tracks[i];
+            if (kind === 'comet') {
+              // the tail: 16 fading beads behind the head, about a third of the arrow long
+              for (let k = 16; k >= 1; k--) {
+                const back = ease(Math.max(0, f - k * 0.022));
+                const p = at(tr, back * tr.len);
+                ctx.globalAlpha = Math.pow(1 - k / 17, 1.3) * 0.85;
+                ctx.fillStyle = colour;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 6.5 * sz * (1 - k / 22), 0, Math.PI * 2); ctx.fill();
+              }
+              ctx.globalAlpha = 1;
+            }
+            glowDot(at(tr, ease(f) * tr.len), 6.5 * sz, colour);
+            break;
+          }
+          continue;
         }
-        moving = moving || !reduceMotion;
+
+        for (const tr of tracks) {
+          if (kind === 'stream') {
+            const spacing = 64 * z;
+            const off = (t * 90 * z) % spacing;
+            for (let d = off; d < tr.len; d += spacing) glowDot(at(tr, d), 4.2 * sz, colour);
+          } else if (kind === 'ants') {
+            ctx.save();
+            ctx.strokeStyle = colour;
+            ctx.lineWidth = 4 * sz;
+            ctx.lineCap = 'round';
+            ctx.setLineDash([11 * sz, 10 * sz]);
+            ctx.lineDashOffset = -t * 48 * sz;
+            ctx.shadowColor = colour; ctx.shadowBlur = 6 * sz;
+            ctx.beginPath();
+            tr.pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+            ctx.stroke();
+            ctx.restore();
+          } else if (kind === 'wave') {
+            const band = Math.min(tr.len * 0.45, 140 * z);
+            const head = ((t * 160 * z) % (tr.len + band));
+            for (let d = Math.max(0, head - band); d <= Math.min(tr.len, head); d += 3) {
+              const a = 1 - (head - d) / band;
+              ctx.globalAlpha = a * a * 0.8;
+              ctx.fillStyle = colour;
+              ctx.beginPath(); ctx.arc(at(tr, d).x, at(tr, d).y, 5 * sz * (0.5 + a * 0.6), 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+          }
+        }
       }
 
       if (m === 'play') {
@@ -178,8 +273,7 @@ export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, dark }: P
     const loop = (now: number) => {
       raf = 0;
       if (document.hidden) return;
-      const moving = draw(now);
-      if (moving) raf = requestAnimationFrame(loop);
+      if (draw(now)) raf = requestAnimationFrame(loop);
     };
     function schedule() {
       if (!raf) raf = requestAnimationFrame(loop);
@@ -204,18 +298,10 @@ export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, dark }: P
     };
   }, [api]);
 
-  // Redraw when the step, the pulse or the badges change.
+  // Redraw when the step, the pulse, the badges or the colour change.
   useEffect(() => {
-    const c = ref.current;
-    if (c) c.dispatchEvent(new Event('lb-redraw'));
-  }, [mode, step, pulseIds, showBadges]);
+    ref.current?.dispatchEvent(new Event('lb-redraw'));
+  }, [mode, step, pulseIds, showBadges, flowColour]);
 
-  return (
-    <canvas
-      ref={ref}
-      className="lb-flow-layer"
-      style={{ filter: dark ? 'invert(93%) hue-rotate(180deg)' : undefined }}
-      aria-hidden="true"
-    />
-  );
+  return <canvas ref={ref} className="lb-flow-layer" aria-hidden="true" />;
 }

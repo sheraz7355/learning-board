@@ -1,4 +1,5 @@
 // The bar that appears when something is selected: what smart ink and the learning tools can do with it.
+import { FLOW_COLOURS, FLOW_KINDS, type FlowKind } from '../learn/FlowLayer';
 
 export type Selection = {
   ids: string[];
@@ -7,6 +8,8 @@ export type Selection = {
   shapes: number;
   step: number | 'mixed';
   flow: boolean;
+  flowKind: FlowKind | null;
+  flowColour: string | null;
   cover: boolean;
 };
 
@@ -18,6 +21,9 @@ type Props = {
   onText: () => void;
   onStraighten: () => void;
   onFlow: () => void;
+  onFlowKind: (k: FlowKind) => void;
+  onFlowColour: (c: string) => void;
+  defaultFlowColour: string;
   onCover: () => void;
   onStep: (delta: number | 'next' | 'clear') => void;
   onMark: (mark: 'ok' | 'cross') => void;
@@ -38,7 +44,19 @@ export function SmartBar({ sel, busy, alternatives, ...a }: Props) {
       )}
       {sel.arrows > 0 && (
         <>
-          <button type="button" className={`lb-btn${sel.flow ? ' on' : ''}`} onClick={a.onFlow} title={`Dots flowing along it (${alt}F)`}>● ● → Flow</button>
+          <button type="button" className={`lb-btn${sel.flow ? ' on' : ''}`} onClick={a.onFlow} title={`Dots flowing along it (${alt}F)`}>● → Flow</button>
+          {sel.flow && (
+            <span className="lb-flowpick" role="group" aria-label="Kind of flow">
+              {FLOW_KINDS.map((k) => (
+                <button key={k.id} type="button" className={`lb-chip${sel.flowKind === k.id ? ' on' : ''}`} onClick={() => a.onFlowKind(k.id)} title={k.name}>
+                  <span className={`lb-flowicon ${k.id}`} aria-hidden="true" />{k.name}
+                </button>
+              ))}
+              {FLOW_COLOURS.map((c) => (
+                <button key={c} type="button" className={`lb-swatch${(sel.flowColour ?? a.defaultFlowColour) === c ? ' on' : ''}`} style={{ background: c }} onClick={() => a.onFlowColour(c)} aria-label={`Flow colour ${c}`} />
+              ))}
+            </span>
+          )}
           <span className="lb-sep" />
         </>
       )}
