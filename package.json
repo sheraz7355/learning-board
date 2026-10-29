@@ -1,0 +1,32 @@
+{
+  "name": "learning-board",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Learning Board: a drawing board for learning — perfect shapes, connected arrows, flowing dots, steps and quiz covers. Installable web app (Windows, Mac).",
+  "scripts": {
+    "dev": "node scripts/copy-fonts.mjs && vite",
+    "build": "node scripts/copy-fonts.mjs && vite build",
+    "serve": "node server.mjs",
+    "start": "npm run build && node server.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

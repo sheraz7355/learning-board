@@ -1,0 +1,10 @@
+node_modules/
+dist/
+public/fonts/
+# your own boards and lessons stay on your computer
+boards/
+lessons/*.json
+!lessons/00-welcome.json
+questions/
+.DS_Store
+*.log

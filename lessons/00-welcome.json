@@ -1,0 +1,29 @@
+{
+  "title": "How a web page reaches you",
+  "oneLine": "Your browser asks a name server where the site lives, then asks that server for the page, which travels back to you.",
+  "nodes": [
+    { "id": "you", "label": "You", "sub": "type example.com", "col": 0, "row": 1, "kind": "person" },
+    { "id": "browser", "label": "Browser", "sub": "Chrome, Edge, Safari", "col": 1, "row": 1, "kind": "server" },
+    { "id": "dns", "label": "Name server (DNS)", "sub": "example.com → 93.184.215.14", "col": 2, "row": 3, "kind": "cloud" },
+    { "id": "site", "label": "Web server", "sub": "where the site lives", "col": 4, "row": 1, "kind": "server" },
+    { "id": "db", "label": "Database", "sub": "the page's content", "col": 4, "row": 3, "kind": "database" },
+    { "id": "cache", "label": "Cache", "sub": "a copy from last time", "col": 2, "row": 0, "kind": "note" }
+  ],
+  "arrows": [
+    { "id": "a1", "from": "you", "to": "browser", "label": "types the address" },
+    { "id": "a2", "from": "browser", "to": "dns", "label": "where is it?" },
+    { "id": "a3", "from": "dns", "to": "browser", "label": "this address", "dashed": true },
+    { "id": "a4", "from": "browser", "to": "site", "label": "send me the page" },
+    { "id": "a5", "from": "site", "to": "db", "label": "reads the content" },
+    { "id": "a6", "from": "site", "to": "browser", "label": "the page", "dashed": true },
+    { "id": "a7", "from": "browser", "to": "cache", "label": "keeps a copy", "dashed": true }
+  ],
+  "steps": [
+    { "say": "You type example.com and press Enter. The browser takes over.", "show": ["you", "browser", "a1"], "flow": ["a1"] },
+    { "say": "The browser only knows the name. It asks a name server (DNS) where that name lives.", "show": ["dns", "a2", "a3"], "flow": ["a2", "a3"] },
+    { "say": "Now it knows the server's address, so it asks that server for the page.", "show": ["site", "a4"], "flow": ["a4"] },
+    { "say": "The server reads the page's content from its database.", "show": ["db", "a5"], "flow": ["a5"], "ok": ["db"] },
+    { "say": "The page travels back and the browser draws it. It keeps a copy, so next time is faster.", "show": ["a6", "cache", "a7"], "flow": ["a6", "a7"], "ok": ["browser"] },
+    { "say": "If the name server is down, the browser never learns the address — the page cannot load even though the web server is fine.", "cross": ["dns"] }
+  ]
+}

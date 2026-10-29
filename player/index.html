@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whiteboard</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Caveat:wght@500;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    try { var t = localStorage.getItem('wb-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Lessons">
+      <div class="brand">
+        <span class="brand-name">Whiteboard</span>
+        <span class="status" id="status">connecting</span>
+      </div>
+      <button class="icon-btn" id="themeBtn" type="button" title="Theme">Theme: auto</button>
+      <ul class="lesson-list" id="lessonList"></ul>
+    </aside>
+
+    <div class="main-col">
+      <div class="picker">
+        <select id="lessonSelect" aria-label="Lesson"></select>
+      </div>
+
+      <main class="main">
+        <header class="lesson-head">
+          <h1 id="title">Whiteboard</h1>
+          <p id="oneLine"></p>
+        </header>
+
+        <div class="error-panel" id="errorPanel" hidden>
+          <h2 id="errorTitle">This lesson could not be read</h2>
+          <div id="errorText"></div>
+          <pre id="errorDetail"></pre>
+        </div>
+
+        <div class="board-wrap" id="boardWrap">
+          <svg id="board" viewBox="0 0 1000 600" role="img" aria-labelledby="title oneLine"></svg>
+        </div>
+
+        <details class="warnings" id="warnings" hidden>
+          <summary id="warnSummary"></summary>
+          <ul id="warnList"></ul>
+        </details>
+
+        <section class="narration" aria-label="Narration">
+          <p class="say" id="say" aria-live="polite"></p>
+          <div class="timer" id="timer"><div></div></div>
+          <div class="controls">
+            <button class="btn" id="backBtn" type="button">&larr; Back</button>
+            <button class="btn primary" id="nextBtn" type="button">Next &rarr;</button>
+            <button class="btn" id="playBtn" type="button" aria-pressed="false">Play</button>
+            <div class="dots" id="dots" role="group" aria-label="Steps"></div>
+            <span class="step-count" id="stepCount"></span>
+          </div>
+          <p class="hint">Keys: &larr; &rarr; step &middot; Space play / pause</p>
+        </section>
+
+        <section class="ask" aria-labelledby="askTitle">
+          <h2 class="ask-title" id="askTitle">Ask about this lesson</h2>
+          <form class="ask-form" id="askForm" novalidate>
+            <label class="sr-only" for="askText">Your question</label>
+            <textarea id="askText" rows="2" maxlength="2000" placeholder="Type a question for Claude…" aria-describedby="askHint"></textarea>
+            <div class="ask-row">
+              <span class="ask-hint" id="askHint">Enter sends &middot; Shift+Enter new line</span>
+              <span class="ask-status" id="askStatus" role="status"></span>
+              <button class="btn primary" id="askSend" type="submit" disabled>Send</button>
+            </div>
+          </form>
+          <p class="sr-only" id="askLive" aria-live="polite"></p>
+          <ol class="thread" id="thread" aria-label="Questions and answers, newest first" tabindex="0"></ol>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+  <script src="board.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
