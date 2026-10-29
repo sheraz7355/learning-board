@@ -196,3 +196,30 @@ body { background: var(--lb-bg); color: var(--lb-ink); font-family: system-ui, -
 }
 @keyframes lb-snap-fade { 0% { opacity: 1; } 70% { opacity: 0.9; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .lb-ring, .lb-snap { animation: none; } }
+
+/* "/" command bar */
+.lb-cmd {
+  position: absolute; left: 50%; top: 84px; transform: translateX(-50%); z-index: 8; width: min(640px, calc(100vw - 32px));
+  background: var(--lb-panel); border: 1px solid var(--lb-line); border-radius: 14px; box-shadow: var(--lb-shadow); padding: 12px;
+}
+.lb-cmd input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 17px; padding: 11px 13px; border-radius: 10px;
+  border: 2px solid var(--lb-accent); background: var(--lb-bg); color: var(--lb-ink); outline: none;
+}
+.lb-cmd-error { color: #dc2626; margin: 8px 2px 0; font-size: 13.5px; }
+.lb-cmd-help { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; }
+.lb-cmd-help li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--lb-muted); }
+.lb-cmd-help button { background: none; border: 0; padding: 3px 0; cursor: pointer; color: var(--lb-ink); }
+.lb-cmd-help code { font-size: 12.5px; background: var(--lb-soft); padding: 2px 6px; border-radius: 6px; }
+@media (max-width: 640px) { .lb-cmd-help { grid-template-columns: 1fr; } }
+
+/* hold C: a ring that fills, then the writing turns into text */
+.lb-hold {
+  position: fixed; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; pointer-events: none; z-index: 7;
+  background: conic-gradient(#22c55e calc(var(--p) * 1turn), rgba(34, 197, 94, 0.15) 0);
+  -webkit-mask: radial-gradient(circle, transparent 13px, #000 14px); mask: radial-gradient(circle, transparent 13px, #000 14px);
+}
+.lb-hold-label {
+  position: fixed; z-index: 7; pointer-events: none; transform: translate(-50%, 30px); font-size: 12px; font-weight: 600;
+  color: #166534; background: #dcfce7; border-radius: 999px; padding: 3px 9px; white-space: nowrap;
+}

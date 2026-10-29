@@ -37,7 +37,12 @@ npm start
 | Pen (**P** or 7): draw a shape, then **pause a moment** before letting go | A ring buzzes, and on release the stroke snaps (with a little shake) into a perfect circle, ellipse, rectangle, square, triangle, diamond or straight line |
 | **Double-click** a stroke | Perfects it afterwards |
 | Draw a line **from one shape to another** (and hold) | They get an arrow that follows them when they move |
-| Select handwriting → **Aa To text** (Alt+W) | Becomes neat text; other readings are offered next to it. Needs internet |
+| Write with the pen, then **hold C** (about a second) | The word or line you just wrote (or the writing under the mouse) becomes neat, correctly spelled text in a handwriting font. Needs internet |
+| Select handwriting → **Aa To text** (Alt+W) | The same for exactly what you selected; other readings are offered next to it |
+| **/** or **＋ Blocks** | Type a structure and get a clean diagram: `array 3 1 4`, `list 1 2 3`, `tree 8 3 10 1 6` (binary search tree), `heap 9 7 8`, `stack 1 2 3`, `queue a b c`, `graph A-B B->C C-D:4`, `matrix 1 2; 3 4`, `grid 3x4`, `hash 7 apple pear` |
+| Select boxes → **⊞ Tidy** (Alt+T) | Lines them up in rows and columns, evenly spaced and the same size; their arrows follow |
+| **Alt+C** | Clean up: every rough shape on the board becomes perfect at once (small letters are left alone) |
+| **Alt+H** | Highlighter: a wide see-through marker for marking a path; Alt+H again for the pen |
 | Select handwriting → **Straighten** (Alt+L) | Keeps your handwriting, lines it up level and smooths it |
 | Select an arrow → **Flow** (Alt+F) | A glowing dot travels along it, and on through arrows that continue one another. Pick a kind (**Dot**, **Stream**, **Comet**, **Ants**, **Wave**) and a colour |
 | **🎨 Style** (top right) | Restyles the whole board: **Sketch** (hand-drawn, the lessons' look), **Chalkboard**, **Clean**, **Marker**, **Blueprint**, **Notebook** |
@@ -64,7 +69,9 @@ share; it also opens on excalidraw.com) and **Open file**. **?** shows all of th
 ## Lessons
 
 Lessons are explanation files (`lessons/*.json`) that open as boards with their steps already made.
-`lessons/00-welcome.json` is an example; open it from ☰ Boards → Lessons. The format, and how a new lesson
+Four come with it (open them from ☰ Boards → Lessons): *How a web page reaches you*, *What Learning Board is
+made of*, *How Learning Board was built, step by step*, and *How a messy circle becomes perfect* (the shape
+recognizer's algorithm: resampling, the recursive RDP corner search, fitting). The format, and how a new lesson
 appears live, are in [docs/LESSONS.md](docs/LESSONS.md).
 
 ## For developers

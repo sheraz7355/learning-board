@@ -3,7 +3,10 @@ import { CaptureUpdateAction, Excalidraw, getSceneVersion, MainMenu, WelcomeScre
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 import type { El } from './board/elements';
-import { perfectStrokes, replaceText, straightenStrokes, strokesToText, type PerfectResult } from './board/inkActions';
+import { cleanUpBoard, perfectStrokes, replaceText, straightenStrokes, strokesToText, writingNear, type PerfectResult } from './board/inkActions';
+import { tidy } from './board/tidy';
+import { buildBlock, layoutFor } from './learn/blocks';
+import { CommandBar } from './ui/CommandBar';
 import { useSmartInk } from './board/useSmartInk';
 import {
   blankBoard, boardFromFile, boardToFile, deleteBoard, download, getBoard, lastBoardId, listBoards, rememberLast, saveBoard,
@@ -38,6 +41,9 @@ export default function App() {
   const [hold, setHold] = useState(() => pref('lb:hold', true));
   const [stepInfo, setStepInfo] = useState<{ last: number; counts: number[] }>({ last: 0, counts: [] });
   const [snaps, setSnaps] = useState<Snap[]>([]);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cHold, setCHold] = useState<{ x: number; y: number; p: number } | null>(null);
+  const highlighter = useRef<{ color: string; opacity: number; width: number } | null>(null);
   const [styling, setStyling] = useState(false);
 
   const boardRef = useRef<Board | null>(null);
@@ -192,11 +198,11 @@ export default function App() {
     else toast('No shape found in that ink — try a closed loop or a straight stroke');
   }, [api, selected, onPerfected, toast]);
 
-  const doText = useCallback(async () => {
+  const doText = useCallback(async (ids?: string[]) => {
     if (!api || busy) return;
     setBusy('text');
     try {
-      const r = await strokesToText(api, selected());
+      const r = await strokesToText(api, ids ?? selected());
       if (r) { setAlts(r.alternatives.length ? { textId: r.textId, options: r.alternatives } : null); toast(`“${r.text}”`); }
     } catch (e) {
       toast(navigator.onLine ? (e instanceof Error ? e.message : 'Could not read it') : 'To text needs internet', 2600);
@@ -204,6 +210,79 @@ export default function App() {
       setBusy(null);
     }
   }, [api, busy, selected, toast]);
+
+  // Hold C: the selected handwriting, or the word / line under (or nearest) the mouse, becomes neat text.
+  const correctWriting = useCallback(async () => {
+    if (!api) return;
+    const st = api.getAppState();
+    const chosen = Object.keys(st.selectedElementIds).filter((k) => st.selectedElementIds[k]);
+    const scene = api.getSceneElements();
+    let ids = scene.filter((e) => chosen.includes(e.id) && e.type === 'freedraw').map((e) => e.id);
+    if (!ids.length) {
+      const ptr = ink.pointer.current;
+      ids = writingNear(api, ptr && Date.now() - ptr.at < 60_000 ? ptr : null);
+    }
+    if (!ids.length) { toast('Write something with the pen first'); return; }
+    await doText(ids);
+  }, [api, doText, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doTidy = useCallback(() => {
+    if (!api) return;
+    const n = tidy(api, selected());
+    toast(n ? `Tidied ${n}  (Ctrl/⌘+Z to undo)` : 'Select two or more boxes to tidy');
+  }, [api, selected, toast]);
+
+  const doCleanUp = useCallback(() => {
+    if (!api) return;
+    const r = cleanUpBoard(api);
+    if (r.changed) onPerfected(r);
+    toast(r.changed ? `Cleaned up ${r.changed} shape${r.changed === 1 ? '' : 's'}  (Ctrl/⌘+Z to undo)` : 'Nothing rough to clean up');
+  }, [api, onPerfected, toast]);
+
+  // Highlighter: a wide, see-through yellow pen; the same key switches back to the pen you had.
+  const toggleHighlighter = useCallback(() => {
+    if (!api) return;
+    const st = api.getAppState();
+    if (highlighter.current) {
+      const prev = highlighter.current;
+      highlighter.current = null;
+      api.updateScene({ appState: { currentItemStrokeColor: prev.color, currentItemOpacity: prev.opacity, currentItemStrokeWidth: prev.width } as never });
+      toast('Pen');
+    } else {
+      highlighter.current = { color: st.currentItemStrokeColor, opacity: st.currentItemOpacity, width: st.currentItemStrokeWidth };
+      api.updateScene({ appState: { currentItemStrokeColor: '#fab005', currentItemOpacity: 40, currentItemStrokeWidth: 4 } as never });
+      toast('Highlighter (Alt+H again for the pen)');
+    }
+    api.setActiveTool({ type: 'freedraw' });
+  }, [api, toast]);
+
+  // "/" bar: a block (array, list, tree, …) or a command (tidy, clean).
+  const runCommand = useCallback((cmd: string): string | null => {
+    if (!api) return 'Not ready yet';
+    const word = cmd.split(/\s+/)[0].toLowerCase();
+    if (word === 'tidy') { doTidy(); return null; }
+    if (word === 'clean' || word === 'cleanup') { doCleanUp(); return null; }
+    if (word === 'highlight' || word === 'highlighter') { toggleHighlighter(); return null; }
+    const layout = layoutFor(cmd);
+    if (!layout) return `"${word}" is not a block. Try array, list, tree, heap, stack, queue, graph, matrix, grid or hash.`;
+    const st = api.getAppState();
+    const z = st.zoom.value;
+    const at = { x: -st.scrollX + st.width / 2 / z, y: -st.scrollY + st.height / 2 / z };
+    const style = styleById(boardRef.current?.style);
+    const els = buildBlock(layout, at, {
+      stroke: st.currentItemStrokeColor === '#1e1e1e' ? style.ink : st.currentItemStrokeColor,
+      roughness: st.currentItemRoughness, strokeWidth: Math.max(1, Math.min(4, st.currentItemStrokeWidth)),
+      font: st.currentItemFontFamily, fill: style.fill === 'solid' ? 'solid' : st.currentItemFillStyle, style,
+    });
+    api.updateScene({
+      elements: [...api.getSceneElementsIncludingDeleted(), ...els],
+      appState: { selectedElementIds: Object.fromEntries(els.filter((e) => !(e.type === 'text' && e.containerId)).map((e) => [e.id, true])) as never },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    api.setActiveTool({ type: 'selection' });
+    toast(`${word} added  (Ctrl/⌘+Z to undo)`);
+    return null;
+  }, [api, doTidy, doCleanUp, toggleHighlighter, toast]);
 
   const doStraighten = useCallback(() => { if (api && straightenStrokes(api, selected())) toast('Straightened'); }, [api, selected, toast]);
 
@@ -299,13 +378,52 @@ export default function App() {
       const run: Record<string, () => void> = {
         KeyP: doPerfect, KeyW: () => void doText(), KeyL: doStraighten, KeyF: doFlow, KeyQ: doCover,
         KeyN: () => doStep('next'), Enter: () => void play(), KeyB: () => setPanel((p) => (p === 'boards' ? 'none' : 'boards')),
+        KeyT: doTidy, KeyC: doCleanUp, KeyH: toggleHighlighter,
       };
       const f = run[e.code];
       if (f) { e.preventDefault(); e.stopPropagation(); f(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [doPerfect, doText, doStraighten, doFlow, doCover, doStep, play, playing]);
+  }, [doPerfect, doText, doStraighten, doFlow, doCover, doStep, play, playing, doTidy, doCleanUp, toggleHighlighter]);
+
+  // "/" opens the block bar; holding C (about a second) turns writing into neat text.
+  useEffect(() => {
+    const HOLD_C_MS = 1000;
+    let t0 = 0, raf = 0, holding = false;
+    const typing = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    };
+    const stop = () => { holding = false; cancelAnimationFrame(raf); setCHold(null); };
+    const down = (e: KeyboardEvent) => {
+      if (playing || cmdOpen || !api || typing(e) || e.altKey || e.ctrlKey || e.metaKey) return;
+      if ((api.getAppState() as unknown as { editingTextElement?: unknown }).editingTextElement) return;
+      if (e.key === '/') { e.preventDefault(); e.stopPropagation(); setCmdOpen(true); return; }
+      if (e.code !== 'KeyC' || e.shiftKey) return;
+      e.preventDefault(); e.stopPropagation();
+      if (holding) return; // key repeat
+      holding = true;
+      t0 = performance.now();
+      const st = api.getAppState();
+      const ptr = ink.pointer.current;
+      const pos = ptr
+        ? { x: (ptr.x + st.scrollX) * st.zoom.value + st.offsetLeft, y: (ptr.y + st.scrollY) * st.zoom.value + st.offsetTop }
+        : { x: st.offsetLeft + st.width / 2, y: st.offsetTop + st.height / 2 };
+      const tick = () => {
+        if (!holding) return;
+        const p = Math.min(1, (performance.now() - t0) / HOLD_C_MS);
+        setCHold({ ...pos, p });
+        if (p >= 1) { stop(); try { navigator.vibrate?.(12); } catch { /* none */ } void correctWriting(); return; }
+        raf = requestAnimationFrame(tick);
+      };
+      tick();
+    };
+    const up = (e: KeyboardEvent) => { if (e.code === 'KeyC' && holding) { e.preventDefault(); e.stopPropagation(); stop(); } };
+    window.addEventListener('keydown', down, true);
+    window.addEventListener('keyup', up, true);
+    return () => { window.removeEventListener('keydown', down, true); window.removeEventListener('keyup', up, true); stop(); };
+  }, [api, playing, cmdOpen, correctWriting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Boards ──────────────────────────────────────────────────────────────────
   const refreshLists = useCallback(async () => {
@@ -433,6 +551,7 @@ export default function App() {
           renderTopRightUI={() => (
             <div className="lb-top">
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'boards' ? 'none' : 'boards'))} title="Your boards and lessons (Alt+B)">☰ {board.name}</button>
+              <button type="button" className="lb-btn" onClick={() => setCmdOpen(true)} title="Add an array, list, tree, stack, queue, graph… (/)">＋ Blocks</button>
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'style' ? 'none' : 'style'))} title="Art style for the whole board">🎨 Style</button>
               <button type="button" className="lb-btn" onClick={() => setPanel((p) => (p === 'steps' ? 'none' : 'steps'))} title="Steps and what to say">Steps{stepInfo.last ? ` (${stepInfo.last})` : ''}</button>
               <button type="button" className="lb-btn primary" onClick={() => void play()} title="Play step by step (Alt+Enter)">▶ Play</button>
@@ -466,6 +585,14 @@ export default function App() {
         </Excalidraw>
         <FlowLayer api={api} mode="edit" showBadges={stepInfo.last > 0} flowColour={styleById(board.style).flow} />
         {snaps.map((s) => <div key={s.key} className="lb-snap" style={{ left: s.x, top: s.y, width: s.w, height: s.h }} aria-hidden="true" />)}
+        {cHold && (
+          <>
+            <div className="lb-hold" style={{ left: cHold.x, top: cHold.y, ['--p' as string]: cHold.p }} aria-hidden="true" />
+            <div className="lb-hold-label" style={{ left: cHold.x, top: cHold.y }}>keep holding C — correcting</div>
+          </>
+        )}
+        {busy === 'text' && !cHold && <div className="lb-hold-label" style={{ left: '50%', top: 70 }}>Reading your writing…</div>}
+        {cmdOpen && <CommandBar onRun={runCommand} onClose={() => setCmdOpen(false)} />}
         {ink.ring && <div className="lb-ring" style={{ left: ink.ring.x, top: ink.ring.y }} aria-hidden="true" />}
         {sel && !playing && (
           <SmartBar
@@ -474,6 +601,7 @@ export default function App() {
             alternatives={alts?.options ?? []}
             onPerfect={doPerfect}
             onText={() => void doText()}
+            onTidy={doTidy}
             onStraighten={doStraighten}
             onFlow={doFlow}
             onFlowKind={doFlowKind}

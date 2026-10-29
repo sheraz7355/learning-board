@@ -222,3 +222,60 @@ export function replaceText(api: API, textId: string, value: string) {
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
 }
+
+/**
+ * The handwriting you mean: the strokes of the word or line around a point (or around the last thing you
+ * wrote). Strokes join when they sit close beside each other on the same line, so a dot on an i or the bar
+ * of a t comes along, but the line above or below does not.
+ */
+export function writingNear(api: API, at: P | null): string[] {
+  const z = api.getAppState().zoom.value;
+  const strokes = api.getSceneElements().filter((e) => e.type === 'freedraw');
+  if (!strokes.length) return [];
+  const box = new Map(strokes.map((s) => [s.id, boundsOf(absPoints(s))]));
+  let seed = strokes[strokes.length - 1];
+  if (at) {
+    let best = Infinity;
+    for (const s of strokes) {
+      const b = box.get(s.id)!;
+      const d = Math.max(b.minX - at.x, 0, at.x - b.maxX) + Math.max(b.minY - at.y, 0, at.y - b.maxY);
+      if (d < best) { best = d; seed = s; }
+    }
+    if (best > 160 / z) seed = [...strokes].sort((a, b) => b.updated - a.updated)[0];
+  }
+  const sb = box.get(seed.id)!;
+  const line = Math.max(18 / z, sb.h);
+  const group = new Set([seed.id]);
+  let g = { ...sb };
+  for (let grew = true; grew && group.size < 160;) {
+    grew = false;
+    for (const s of strokes) {
+      if (group.has(s.id)) continue;
+      const b = box.get(s.id)!;
+      if (b.h > line * 3.2) continue; // a big drawing, not a letter
+      const padX = line * 1.25, padY = line * 0.55;
+      if (b.maxX >= g.minX - padX && b.minX <= g.maxX + padX && b.maxY >= g.minY - padY && b.minY <= g.maxY + padY) {
+        group.add(s.id);
+        g = { minX: Math.min(g.minX, b.minX), minY: Math.min(g.minY, b.minY), maxX: Math.max(g.maxX, b.maxX), maxY: Math.max(g.maxY, b.maxY), w: 0, h: 0 };
+        grew = true;
+      }
+    }
+  }
+  return strokes.filter((s) => group.has(s.id)).map((s) => s.id);
+}
+
+/**
+ * Clean up the whole board: every rough stroke that is clearly a shape, a line between two shapes, or a long
+ * straight line becomes perfect. Small strokes (letters such as O or l) are left as written.
+ */
+export function cleanUpBoard(api: API): PerfectResult {
+  const z = api.getAppState().zoom.value;
+  const ids: string[] = [];
+  for (const s of api.getSceneElements()) {
+    if (s.type !== 'freedraw') continue;
+    const b = boundsOf(absPoints(s));
+    if (Math.max(b.w, b.h) < 46 / Math.min(1, z)) continue;
+    ids.push(s.id);
+  }
+  return perfectStrokes(api, ids);
+}

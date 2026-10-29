@@ -1,0 +1,39 @@
+{
+  "title": "How a messy circle becomes perfect",
+  "oneLine": "The stroke is evened out, its corners are found with a recursive divide-and-conquer algorithm (RDP), a few shapes are fitted, and the one with the smallest error wins.",
+  "nodes": [
+    { "id": "stroke", "label": "Your stroke", "sub": "a few hundred shaky points", "col": 0, "row": 1, "kind": "person" },
+    { "id": "resample", "label": "Resample", "sub": "64 points, evenly spaced · O(n)", "col": 1, "row": 1, "kind": "server" },
+    { "id": "closed", "label": "Ends meet?", "sub": "gap small vs the size", "col": 2, "row": 1, "kind": "switch" },
+    { "id": "line", "label": "Straight line?", "sub": "end-to-end ÷ length > 0.93", "col": 2, "row": 3, "kind": "server" },
+    { "id": "trim", "label": "Trim the overlap", "sub": "cut what runs past the start", "col": 3, "row": 0, "kind": "server" },
+    { "id": "rdp", "label": "Find corners (RDP)", "sub": "recursive · avg O(n log n)", "col": 4, "row": 0, "kind": "server" },
+    { "id": "ellipse", "label": "Fit an ellipse", "sub": "main axes (PCA), radial error", "col": 3, "row": 2, "kind": "server" },
+    { "id": "rect", "label": "Fit a box / triangle", "sub": "sides at the median point", "col": 4, "row": 2, "kind": "server" },
+    { "id": "pick", "label": "Smallest error wins", "sub": "circle? square? triangle?", "col": 4, "row": 3, "kind": "switch" },
+    { "id": "note", "label": "RDP in one line", "sub": "farthest point from the chord: if it is far, split there and recurse on both halves", "col": 0, "row": 3, "kind": "note" }
+  ],
+  "arrows": [
+    { "id": "r1", "from": "stroke", "to": "resample" },
+    { "id": "r2", "from": "resample", "to": "closed" },
+    { "id": "r3", "from": "closed", "to": "line", "label": "no: open" },
+    { "id": "r4", "from": "closed", "to": "trim", "label": "yes: a loop" },
+    { "id": "r5", "from": "trim", "to": "rdp" },
+    { "id": "r6", "from": "trim", "to": "ellipse" },
+    { "id": "r7", "from": "rdp", "to": "rect", "label": "3 or 4 corners" },
+    { "id": "r8", "from": "ellipse", "to": "pick" },
+    { "id": "r9", "from": "rect", "to": "pick" },
+    { "id": "r10", "from": "note", "to": "rdp", "dashed": true }
+  ],
+  "steps": [
+    { "say": "A mouse stroke is a list of points — many where you moved slowly, few where you were fast.", "show": ["stroke"] },
+    { "say": "Resample: walk along the stroke and place 64 points at equal distances. Now every part counts the same. One pass: O(n).", "show": ["resample", "r1"], "flow": ["r1"] },
+    { "say": "Do the two ends meet? Compare the gap between first and last point with the size of the drawing.", "show": ["closed", "r2"], "flow": ["r2"] },
+    { "say": "If not, it is open: when the straight distance end-to-end is more than 93% of the stroke's length, it is a line (and snaps level or upright when close).", "show": ["line", "r3"], "flow": ["r3"] },
+    { "say": "If it is a loop, the end usually runs a little past the start. That overlap would look like an extra corner, so it is cut off first.", "show": ["trim", "r4"], "flow": ["r4"] },
+    { "say": "Corners with RDP (Ramer–Douglas–Peucker), a divide-and-conquer recursion: find the point farthest from the line between the ends; if it is far, it is a corner — split there and do the same on both halves.", "show": ["rdp", "r5", "note", "r10"], "flow": ["r5"] },
+    { "say": "At the same time, fit an ellipse along the stroke's two main directions (PCA) and measure how far the points miss it.", "show": ["ellipse", "r6"], "flow": ["r6"] },
+    { "say": "Three corners make a triangle candidate; four right-angled corners a box. Each side sits at the middle (median) of its points, so one wobble cannot push it out.", "show": ["rect", "r7"], "flow": ["r7"] },
+    { "say": "The shape with the smallest error wins; an ellipse with nearly equal radii becomes a circle. All of this takes well under a millisecond.", "show": ["pick", "r8", "r9"], "flow": ["r8", "r9"], "ok": ["pick"] }
+  ]
+}

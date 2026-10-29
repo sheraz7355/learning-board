@@ -5,6 +5,9 @@ public/fonts/
 boards/
 lessons/*.json
 !lessons/00-welcome.json
+!lessons/19-what-learning-board-is-made-of.json
+!lessons/20-how-learning-board-was-built.json
+!lessons/21-how-a-messy-circle-becomes-perfect.json
 questions/
 .DS_Store
 *.log

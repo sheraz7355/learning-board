@@ -1,0 +1,39 @@
+{
+  "title": "How Learning Board was built, step by step",
+  "oneLine": "Start from a proven canvas, add the hard part (shape recognition) with tests first, then the gestures, the learning tools, saving, and finally polish from real use.",
+  "nodes": [
+    { "id": "s1", "label": "1. Move it out", "sub": "its own folder and git repo", "col": 0, "row": 0, "kind": "note" },
+    { "id": "s2", "label": "2. Pick the engine", "sub": "Excalidraw (MIT), not from scratch", "col": 1, "row": 0, "kind": "switch" },
+    { "id": "s3", "label": "3. Shape recognizer", "sub": "geometry + tests: 95%+ right", "col": 2, "row": 0, "kind": "server" },
+    { "id": "s4", "label": "4. Gestures", "sub": "hold, double-click, auto", "col": 3, "row": 0, "kind": "server" },
+    { "id": "s5", "label": "5. Connect + write", "sub": "attached arrows, writing to text", "col": 4, "row": 1, "kind": "server" },
+    { "id": "s6", "label": "6. Learning layer", "sub": "flows, steps, Play, quiz", "col": 3, "row": 2, "kind": "server" },
+    { "id": "s7", "label": "7. Save + install", "sub": "IndexedDB, PWA, Node server", "col": 2, "row": 2, "kind": "database" },
+    { "id": "s8", "label": "8. Test like a user", "sub": "real mouse in Chrome, screenshots", "col": 1, "row": 2, "kind": "person" },
+    { "id": "s9", "label": "9. Styles + flows", "sub": "Sketch look, 5 kinds of flow", "col": 0, "row": 3, "kind": "server" },
+    { "id": "s10", "label": "10. Faster drawing", "sub": "blocks, Tidy, hold C", "col": 2, "row": 3, "kind": "server" }
+  ],
+  "arrows": [
+    { "id": "e1", "from": "s1", "to": "s2" },
+    { "id": "e2", "from": "s2", "to": "s3" },
+    { "id": "e3", "from": "s3", "to": "s4" },
+    { "id": "e4", "from": "s4", "to": "s5" },
+    { "id": "e5", "from": "s5", "to": "s6" },
+    { "id": "e6", "from": "s6", "to": "s7" },
+    { "id": "e7", "from": "s7", "to": "s8" },
+    { "id": "e8", "from": "s8", "to": "s9", "label": "your feedback" },
+    { "id": "e9", "from": "s9", "to": "s10" }
+  ],
+  "steps": [
+    { "say": "The old lesson board moved out of the work project into its own folder, made into a git repo so friends can clone it.", "show": ["s1"] },
+    { "say": "Drawing engines take years. Instead of writing one, it uses Excalidraw, an open-source canvas, and spends the effort on what is new.", "show": ["s2", "e1"], "flow": ["e1"] },
+    { "say": "The hardest part first: turning a shaky stroke into the shape it meant. Tests came with it — 200 wobbly drawings of each shape must be recognised at least 95% of the time.", "show": ["s3", "e2"], "flow": ["e2"], "ok": ["s3"] },
+    { "say": "Then the gestures that trigger it, the way pro apps do: pause at the end of a stroke, or double-click it later.", "show": ["s4", "e3"], "flow": ["e3"] },
+    { "say": "A line from one shape to another becomes an arrow attached to both; handwriting can become neat text.", "show": ["s5", "e4"], "flow": ["e4"] },
+    { "say": "The learning tools: dots flowing along arrows, steps with notes, Play with pulses, ticks, crosses and quiz cards.", "show": ["s6", "e5"], "flow": ["e5"] },
+    { "say": "Boards are saved in the browser, the app installs and works offline, and a small Node server serves it. Windows and Mac alike.", "show": ["s7", "e6"], "flow": ["e6"] },
+    { "say": "Every feature was checked with a real mouse in Chrome and screenshots. That caught real bugs: a hidden Play button, arrows bunched in a corner, a last step that never played.", "show": ["s8", "e7"], "flow": ["e7"], "ok": ["s8"] },
+    { "say": "Your feedback shaped the rest: the lessons' hand-drawn look as art styles, the bright green dot, five kinds of flow, a quicker snap with a shake.", "show": ["s9", "e8"], "flow": ["e8"] },
+    { "say": "And for learning DSA fast: / blocks for arrays, lists, trees, heaps, graphs and hash tables, Tidy to line things up, and hold C to fix your writing.", "show": ["s10", "e9"], "flow": ["e9"], "ok": ["s10"] }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "title": "What Learning Board is made of",
+  "oneLine": "A web app: React and TypeScript around the Excalidraw canvas, our smart ink and learning layer on top, saved in your browser and served by a small Node server.",
+  "nodes": [
+    { "id": "you", "label": "You", "sub": "mouse, pen or touch", "col": 0, "row": 0, "kind": "person" },
+    { "id": "browser", "label": "Your browser", "sub": "Chrome or Edge, draws on the GPU", "col": 1, "row": 0, "kind": "phone" },
+    { "id": "react", "label": "React + TypeScript", "sub": "the screens, buttons and panels", "col": 2, "row": 1, "kind": "server" },
+    { "id": "excal", "label": "Excalidraw", "sub": "open-source canvas: shapes, arrows, zoom, undo", "col": 2, "row": 3, "kind": "cloud" },
+    { "id": "ink", "label": "Smart ink (ours)", "sub": "shapes, connectors, writing", "col": 0, "row": 3, "kind": "switch" },
+    { "id": "learn", "label": "Learning layer (ours)", "sub": "flows, steps, Play, styles, blocks", "col": 3, "row": 2, "kind": "switch" },
+    { "id": "idb", "label": "IndexedDB", "sub": "boards saved in your browser", "col": 4, "row": 3, "kind": "database" },
+    { "id": "google", "label": "Google handwriting", "sub": "only for To text and hold C", "col": 0, "row": 2, "kind": "cloud" },
+    { "id": "vite", "label": "Vite", "sub": "builds it into small, fast files", "col": 4, "row": 0, "kind": "server" },
+    { "id": "node", "label": "Node server", "sub": "server.mjs on this computer", "col": 3, "row": 0, "kind": "server" },
+    { "id": "sw", "label": "Service worker", "sub": "installable app, works offline", "col": 1, "row": 2, "kind": "note" },
+    { "id": "lessons", "label": "lessons/*.json", "sub": "explanations like this one", "col": 4, "row": 1, "kind": "note" }
+  ],
+  "arrows": [
+    { "id": "a1", "from": "you", "to": "browser", "label": "draws" },
+    { "id": "a2", "from": "vite", "to": "node", "label": "builds" },
+    { "id": "a3", "from": "node", "to": "browser", "label": "serves the app" },
+    { "id": "a4", "from": "browser", "to": "react", "label": "runs" },
+    { "id": "a5", "from": "react", "to": "excal", "label": "hosts" },
+    { "id": "a6", "from": "excal", "to": "ink", "label": "every stroke" },
+    { "id": "a7", "from": "ink", "to": "excal", "label": "perfect shape", "dashed": true },
+    { "id": "a8", "from": "react", "to": "learn", "label": "uses" },
+    { "id": "a9", "from": "learn", "to": "idb", "label": "saves boards" },
+    { "id": "a10", "from": "ink", "to": "google", "label": "strokes, when asked" },
+    { "id": "a11", "from": "sw", "to": "browser", "label": "offline copy", "dashed": true },
+    { "id": "a12", "from": "node", "to": "lessons", "label": "watches" }
+  ],
+  "steps": [
+    { "say": "You draw in your browser. The board is a canvas the graphics card paints, which is why it stays smooth.", "show": ["you", "browser", "a1"], "flow": ["a1"] },
+    { "say": "The code is TypeScript with React for the screens. Vite builds it into small files; a tiny Node server (server.mjs) serves them on this computer.", "show": ["vite", "node", "react", "a2", "a3", "a4"], "flow": ["a2", "a3", "a4"] },
+    { "say": "The canvas itself is Excalidraw, an open-source drawing engine: shapes, arrows that stay attached, text, zoom and undo come from it.", "show": ["excal", "a5"], "flow": ["a5"] },
+    { "say": "Our smart ink watches every stroke. Pure geometry (no AI) decides in under a millisecond whether it was meant to be a circle, a box or a line, and hands back the perfect shape.", "show": ["ink", "a6", "a7"], "flow": ["a6", "a7"] },
+    { "say": "The learning layer is ours too: flowing dots on a see-through canvas, steps and Play, quiz cards, art styles, and the / blocks for arrays, trees and graphs.", "show": ["learn", "a8"], "flow": ["a8"] },
+    { "say": "Boards are saved in IndexedDB, a small database inside your browser. Nothing is uploaded.", "show": ["idb", "a9"], "flow": ["a9"], "ok": ["idb"] },
+    { "say": "Only one thing goes online: when you ask to turn writing into text, the pen strokes are sent to Google's handwriting reader.", "show": ["google", "a10"], "flow": ["a10"] },
+    { "say": "A service worker keeps a copy of the app, so it installs like a program and opens even offline.", "show": ["sw", "a11"], "flow": ["a11"], "ok": ["browser"] },
+    { "say": "Lessons are plain JSON files. The Node server watches the folder and sends a new lesson to the open page within a second.", "show": ["lessons", "a12"], "flow": ["a12"] }
+  ]
+}

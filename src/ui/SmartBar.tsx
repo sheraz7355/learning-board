@@ -19,6 +19,7 @@ type Props = {
   alternatives: string[];
   onPerfect: () => void;
   onText: () => void;
+  onTidy: () => void;
   onStraighten: () => void;
   onFlow: () => void;
   onFlowKind: (k: FlowKind) => void;
@@ -66,6 +67,9 @@ export function SmartBar({ sel, busy, alternatives, ...a }: Props) {
         <button type="button" className="lb-btn" onClick={() => a.onStep(1)} aria-label="Later step">+</button>
         <button type="button" className="lb-btn" onClick={() => a.onStep('next')} title={`Make these the next step (${alt}N)`}>Next step</button>
       </span>
+      {sel.shapes > 1 && (
+        <button type="button" className="lb-btn" onClick={a.onTidy} title={`Line them up and space them evenly (${alt}T)`}>⊞ Tidy</button>
+      )}
       {sel.shapes > 0 && (
         <>
           <button type="button" className={`lb-btn${sel.cover ? ' on' : ''}`} onClick={a.onCover} title={`Hide under a card in Play until clicked (${alt}Q)`}>? Quiz</button>

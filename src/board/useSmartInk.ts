@@ -24,6 +24,8 @@ export function useSmartInk(api: ExcalidrawImperativeAPI | null, opts: Opts) {
   o.current = opts;
   const s = useRef({ down: false, startedAt: 0, last: { x: 0, y: 0 }, armed: false, timer: 0 as ReturnType<typeof setTimeout> | 0 });
   const [ring, setRing] = useState<{ x: number; y: number } | null>(null);
+  // Where the mouse is on the board (for "hold C": the writing under or nearest the mouse).
+  const pointer = useRef<{ x: number; y: number; at: number } | null>(null);
 
   const showRing = useCallback((sceneX: number, sceneY: number) => {
     if (!api) return;
@@ -33,6 +35,7 @@ export function useSmartInk(api: ExcalidrawImperativeAPI | null, opts: Opts) {
 
   // Movement while the pen is down (Excalidraw reports pointer moves in board coordinates).
   const onPointerUpdate = useCallback((p: { pointer: { x: number; y: number }; button: 'down' | 'up' }) => {
+    pointer.current = { x: p.pointer.x, y: p.pointer.y, at: Date.now() };
     const st = s.current;
     if (!api || !st.down || p.button !== 'down') return;
     if (api.getAppState().activeTool.type !== 'freedraw') return;
@@ -127,5 +130,5 @@ export function useSmartInk(api: ExcalidrawImperativeAPI | null, opts: Opts) {
     return () => window.removeEventListener('dblclick', onDbl, true);
   }, [api]);
 
-  return { onPointerUpdate, ring };
+  return { onPointerUpdate, ring, pointer };
 }

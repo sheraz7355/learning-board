@@ -216,6 +216,17 @@ export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, flowColou
           ctx.lineWidth = 4;
           for (const el of els) {
             if (!pulse.has(el.id) || (el.type === 'text' && el.containerId)) continue;
+            if (el.type === 'arrow' || el.type === 'line') {
+              // an arrow glows along its own line (its box can be half the board)
+              const pts = pathOf(el).map(toV);
+              ctx.save();
+              ctx.lineWidth = 11; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+              ctx.beginPath();
+              pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+              ctx.stroke();
+              ctx.restore();
+              continue;
+            }
             const b = boxOf(el);
             const p = toV({ x: b.minX, y: b.minY });
             const pad = 8;
@@ -259,8 +270,15 @@ export function FlowLayer({ api, mode, step = 0, pulseIds, showBadges, flowColou
         for (const el of els) {
           const s2 = stepOf(el);
           if (!s2 || (el.type === 'text' && el.containerId)) continue;
-          const b = boxOf(el);
-          const p = toV({ x: b.minX, y: b.minY });
+          let p: P;
+          if (el.type === 'arrow' || el.type === 'line') {
+            // on the line itself, a third of the way along (the middle is where its label sits)
+            const tr = track(pathOf(el).map(toV), z);
+            p = at(tr, tr.len / 3);
+          } else {
+            const b = boxOf(el);
+            p = toV({ x: b.minX, y: b.minY });
+          }
           ctx.fillStyle = '#7c3aed';
           ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#ffffff';

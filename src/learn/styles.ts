@@ -47,7 +47,7 @@ const mix = (a: [number, number, number], b: [number, number, number], t: number
 const INKS = new Set(STYLES.map((s) => s.ink.toLowerCase()).concat(['#1e1e1e', '#000000', '#343a40', '#1f2429']));
 
 /** A line or text colour that reads on this style's paper. */
-function inkFor(color: string, st: ArtStyle): string {
+export function inkFor(color: string, st: ArtStyle): string {
   if (INKS.has(color.toLowerCase())) return st.ink;
   const c = rgb(color);
   if (!c) return color;
@@ -58,7 +58,7 @@ function inkFor(color: string, st: ArtStyle): string {
 }
 
 /** A fill that sits well on this style's paper (soft fills turn into deep tints on dark paper and back). */
-function fillFor(color: string, st: ArtStyle): string {
+export function fillFor(color: string, st: ArtStyle): string {
   if (color === 'transparent') return color;
   const c = rgb(color);
   if (!c) return color;
