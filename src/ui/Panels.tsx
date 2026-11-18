@@ -12,7 +12,9 @@ type BoardsProps = {
   onNew: () => void;
   onDelete: (id: string) => void;
   onDownload: () => void;
-  onImport: (file: File) => void;
+  onImport: (files: File[]) => void;
+  onDownloadZip: (boardIds: string[], lessonIds: string[]) => void;
+  packing: boolean;
   onOpenLesson: (id: string) => void;
   onRebuildLesson: (id: string) => void;
   onClose: () => void;
@@ -22,7 +24,21 @@ export function BoardsPanel(p: BoardsProps) {
   const [name, setName] = useState(p.current.name);
   const [confirming, setConfirming] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
+  // Ticked boards and lessons, for downloading many at once as one .zip.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   useEffect(() => setName(p.current.name), [p.current.name]);
+  const usable = p.lessons.filter((l) => !l.error);
+  const allKeys = [...p.boards.map((b) => `b:${b.id}`), ...usable.map((l) => `l:${l.id}`)];
+  const ticked = allKeys.filter((k) => picked.has(k));
+  const toggle = (k: string) => setPicked((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const setMany = (keys: string[], on: boolean) => setPicked((s) => { const n = new Set(s); for (const k of keys) { if (on) n.add(k); else n.delete(k); } return n; });
+  const boardKeys = p.boards.map((b) => `b:${b.id}`);
+  const lessonKeys = usable.map((l) => `l:${l.id}`);
+  const allOn = (keys: string[]) => keys.length > 0 && keys.every((k) => picked.has(k));
+  const downloadPicked = () => p.onDownloadZip(
+    ticked.filter((k) => k.startsWith('b:')).map((k) => k.slice(2)),
+    ticked.filter((k) => k.startsWith('l:')).map((k) => k.slice(2)),
+  );
   const when = (t: number) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
   return (
@@ -43,13 +59,28 @@ export function BoardsPanel(p: BoardsProps) {
       <div className="lb-row">
         <button type="button" className="lb-btn primary" onClick={p.onNew}>New board</button>
         <button type="button" className="lb-btn" onClick={p.onDownload} title="Save this board as a file to share or keep">Download</button>
-        <button type="button" className="lb-btn" onClick={() => file.current?.click()} title="Open a .excalidraw board file">Open file…</button>
-        <input ref={file} type="file" accept=".excalidraw,.json,application/json" hidden
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onImport(f); e.target.value = ''; }} />
+        <button type="button" className="lb-btn" onClick={() => file.current?.click()} title="Open board files, or a .zip of boards">Open file…</button>
+        <input ref={file} type="file" accept=".excalidraw,.json,.zip,application/json,application/zip" multiple hidden
+          onChange={(e) => { const f = Array.from(e.target.files ?? []); if (f.length) p.onImport(f); e.target.value = ''; }} />
       </div>
+      <div className="lb-zipbar">
+        <label className="lb-check" title="Tick every board and lesson">
+          <input type="checkbox" checked={allOn(allKeys)} onChange={(e) => setMany(allKeys, e.target.checked)} /> Select all
+        </label>
+        <span className="lb-grow" />
+        {ticked.length > 0 && <button type="button" className="lb-link" onClick={() => setPicked(new Set())}>clear</button>}
+        <button type="button" className="lb-btn primary" disabled={!ticked.length || p.packing} onClick={downloadPicked}
+          title="One .zip file with every ticked board. On the other computer: Boards → Open file… and pick the zip.">
+          {p.packing ? 'Packing…' : `⬇ Download ${ticked.length || ''} as .zip`}
+        </button>
+      </div>
+      <h3 className="lb-listhead">
+        <label className="lb-check"><input type="checkbox" checked={allOn(boardKeys)} onChange={(e) => setMany(boardKeys, e.target.checked)} aria-label="Select all boards" /> My boards</label>
+      </h3>
       <ul className="lb-list">
         {p.boards.map((b) => (
           <li key={b.id} className={b.id === p.current.id ? 'on' : ''}>
+            <input type="checkbox" className="lb-tick" checked={picked.has(`b:${b.id}`)} onChange={() => toggle(`b:${b.id}`)} aria-label={`Select ${b.name}`} />
             <button type="button" className="lb-item" onClick={() => p.onOpen(b.id)}>
               <strong>{b.name}</strong>
               <small>{when(b.updatedAt)}</small>
@@ -67,11 +98,14 @@ export function BoardsPanel(p: BoardsProps) {
       </ul>
       {p.lessons.length > 0 && (
         <>
-          <h3>Lessons</h3>
+          <h3 className="lb-listhead">
+            <label className="lb-check"><input type="checkbox" checked={allOn(lessonKeys)} onChange={(e) => setMany(lessonKeys, e.target.checked)} aria-label="Select all lessons" /> Lessons</label>
+          </h3>
           <p className="lb-hint">Explanations written for you. Opening one makes an editable board with its steps.</p>
           <ul className="lb-list">
             {p.lessons.map((l) => (
               <li key={l.id}>
+                <input type="checkbox" className="lb-tick" disabled={!!l.error} checked={picked.has(`l:${l.id}`)} onChange={() => toggle(`l:${l.id}`)} aria-label={`Select ${l.title || l.id}`} />
                 <button type="button" className="lb-item" onClick={() => p.onOpenLesson(l.id)} disabled={!!l.error}>
                   <strong>{l.title || l.id}</strong>
                   <small>{l.error ? 'has an error' : l.id}</small>

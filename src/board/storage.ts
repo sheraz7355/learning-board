@@ -5,6 +5,7 @@
 import { loadFromBlob, serializeAsJSON } from '@excalidraw/excalidraw';
 import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
 import type { El } from './elements';
+import { makeZip, readZip } from './zip';
 
 export type BoardMeta = { id: string; name: string; createdAt: number; updatedAt: number; lessonId?: string };
 export type Board = BoardMeta & {
@@ -89,13 +90,13 @@ export function blankBoard(name = 'Untitled board'): Board {
 /** A board as a .excalidraw file, with the learning notes alongside (other apps simply ignore them). */
 export function boardToFile(board: Board): Blob {
   const base = JSON.parse(serializeAsJSON(board.elements as never, board.appState as Partial<AppState> as never, board.files, 'local'));
-  base.learningBoard = { name: board.name, notes: board.notes, style: board.style };
+  base.learningBoard = { name: board.name, notes: board.notes, style: board.style, lessonId: board.lessonId };
   return new Blob([JSON.stringify(base, null, 2)], { type: 'application/json' });
 }
 
 export async function boardFromFile(file: File): Promise<Board> {
   const text = await file.text();
-  let extra: { name?: string; notes?: string[]; style?: string } = {};
+  let extra: { name?: string; notes?: string[]; style?: string; lessonId?: string } = {};
   try { extra = JSON.parse(text)?.learningBoard ?? {}; } catch { /* not ours: fine */ }
   const scene = await loadFromBlob(new Blob([text], { type: 'application/json' }), null, null);
   const b = blankBoard(extra.name || file.name.replace(/\.(excalidraw|json)$/i, '') || 'Imported board');
@@ -106,8 +107,51 @@ export async function boardFromFile(file: File): Promise<Board> {
     files: scene.files ?? {},
     notes: Array.isArray(extra.notes) ? extra.notes.map(String) : [],
     style: typeof extra.style === 'string' ? extra.style : undefined,
+    lessonId: typeof extra.lessonId === 'string' ? extra.lessonId : undefined,
   };
 }
+
+/** A file name that works on Windows, Mac and Linux. */
+export const safeName = (name: string) => name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').trim().slice(0, 120) || 'board';
+
+/** Many boards in one .zip: one .excalidraw file each, numbered so they keep their order. */
+export async function boardsToZip(boards: Board[]): Promise<Blob> {
+  const used = new Set<string>();
+  const pad = String(boards.length).length;
+  const entries = await Promise.all(boards.map(async (b, i) => {
+    let name = `${String(i + 1).padStart(pad, '0')} ${safeName(b.name)}.excalidraw`;
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = `${String(i + 1).padStart(pad, '0')} ${safeName(b.name)} (${n}).excalidraw`;
+    used.add(name.toLowerCase());
+    return { name, data: new Uint8Array(await boardToFile(b).arrayBuffer()) };
+  }));
+  entries.push({
+    name: 'How to open.txt',
+    data: new TextEncoder().encode(
+      'These are Learning Board boards.\r\n\r\n'
+      + 'To open them all: in Learning Board, open Boards (top right) -> Open file... and pick this .zip file.\r\n'
+      + 'Each .excalidraw file also opens on its own, in Learning Board or on excalidraw.com.\r\n',
+    ),
+  });
+  return makeZip(entries);
+}
+
+/** Every board inside a .zip (files that are not boards are skipped). */
+export async function boardsFromZip(file: Blob): Promise<Board[]> {
+  const entries = (await readZip(file))
+    .filter((e) => /\.(excalidraw|json)$/i.test(e.name) && !/(^|\/)(__MACOSX\/|\._)/.test(e.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const out: Board[] = [];
+  for (const e of entries) {
+    const base = e.name.split('/').pop()!.replace(/^\d+ /, '');
+    try { out.push(await boardFromFile(new File([e.data as BlobPart], base))); } catch { /* not a board: skip */ }
+  }
+  return out;
+}
+
+export const isZip = async (f: Blob) => {
+  const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+  return head[0] === 0x50 && head[1] === 0x4b && head[2] === 3 && head[3] === 4;
+};
 
 export function download(blob: Blob, filename: string) {
   const a = document.createElement('a');

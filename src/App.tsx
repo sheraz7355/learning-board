@@ -9,8 +9,8 @@ import { buildBlock, layoutFor } from './learn/blocks';
 import { CommandBar } from './ui/CommandBar';
 import { useSmartInk } from './board/useSmartInk';
 import {
-  blankBoard, boardFromFile, boardToFile, deleteBoard, download, getBoard, lastBoardId, listBoards, rememberLast, saveBoard,
-  type Board, type BoardMeta,
+  blankBoard, boardFromFile, boardsFromZip, boardsToZip, boardToFile, deleteBoard, download, getBoard, isZip, lastBoardId,
+  listBoards, rememberLast, safeName, saveBoard, type Board, type BoardMeta,
 } from './board/storage';
 import { fetchLesson, fetchLessons, fontsReady, LESSON_PAPER, LESSON_STYLE, lessonToBoard, type LessonRow } from './board/lessons';
 import { FlowLayer, flowKindOf, type FlowKind } from './learn/FlowLayer';
@@ -45,6 +45,7 @@ export default function App() {
   const [cHold, setCHold] = useState<{ x: number; y: number; p: number } | null>(null);
   const highlighter = useRef<{ color: string; opacity: number; width: number } | null>(null);
   const [styling, setStyling] = useState(false);
+  const [packing, setPacking] = useState(false);
 
   const boardRef = useRef<Board | null>(null);
   boardRef.current = board;
@@ -481,9 +482,53 @@ export default function App() {
     const b = boardRef.current;
     if (b) download(boardToFile(b), `${b.name.replace(/[\\/:*?"<>|]+/g, '-')}.excalidraw`);
   }, [flushSave]);
-  const importFile = useCallback(async (f: File) => {
-    try { const b = await boardFromFile(f); await saveBoard(b); await open(b); setPanel('none'); }
-    catch { toast('That file is not a board'); }
+  // Many boards (and lessons) in one .zip, to share or move to another computer.
+  const downloadZip = useCallback(async (boardIds: string[], lessonIds: string[]) => {
+    setPacking(true);
+    try {
+      await flushSave();
+      const picked: Board[] = [];
+      for (const id of boardIds) { const b = await getBoard(id); if (b) picked.push(b); }
+      const all = await listBoards();
+      let fontsLoaded = false;
+      for (const id of lessonIds) {
+        if (picked.some((b) => b.lessonId === id)) continue;
+        // A lesson opened before goes with your edits; one never opened is built from its file.
+        const saved = all.find((b) => b.lessonId === id);
+        const b = saved ? await getBoard(saved.id) : null;
+        if (b) { picked.push(b); continue; }
+        const lesson = await fetchLesson(id);
+        if (!fontsLoaded) { await fontsReady(); fontsLoaded = true; }
+        const { elements, notes } = lessonToBoard(lesson);
+        picked.push({ ...blankBoard(lesson.title || id), elements, notes, lessonId: id, style: LESSON_STYLE, appState: { viewBackgroundColor: LESSON_PAPER } });
+      }
+      if (!picked.length) return;
+      const day = new Date().toISOString().slice(0, 10);
+      const name = picked.length === 1 ? safeName(picked[0].name) : `Learning Board - ${picked.length} boards - ${day}`;
+      download(await boardsToZip(picked), `${name}.zip`);
+      toast(`Downloaded ${picked.length} board${picked.length === 1 ? '' : 's'} in one .zip`);
+    } catch (e) {
+      toast(e instanceof Error ? `Could not make the zip: ${e.message}` : 'Could not make the zip');
+    } finally {
+      setPacking(false);
+    }
+  }, [flushSave, toast]);
+
+  // Open file…: a board file, several, or a .zip of boards. Everything is added to your boards.
+  const importFiles = useCallback(async (files: File[]) => {
+    const added: Board[] = [];
+    let bad = 0;
+    for (const f of files) {
+      try {
+        const got = (await isZip(f)) ? await boardsFromZip(f) : [await boardFromFile(f)];
+        if (!got.length) bad++;
+        for (const b of got) { await saveBoard(b); added.push(b); }
+      } catch { bad++; }
+    }
+    if (!added.length) { toast(files.length > 1 ? 'Those files are not boards' : 'That file is not a board'); return; }
+    await open(added[0]);
+    setPanel(added.length > 1 ? 'boards' : 'none');
+    if (added.length > 1 || bad) toast(`Added ${added.length} board${added.length === 1 ? '' : 's'}${bad ? ` (${bad} file${bad === 1 ? '' : 's'} skipped)` : ''}`, 2600);
   }, [open, toast]);
   const openLesson = useCallback(async (id: string, rebuild = false) => {
     try {
@@ -624,7 +669,9 @@ export default function App() {
           onNew={() => void newBoard()}
           onDelete={(id) => void remove(id)}
           onDownload={() => void downloadBoard()}
-          onImport={(f) => void importFile(f)}
+          onImport={(f) => void importFiles(f)}
+          onDownloadZip={(b, l) => void downloadZip(b, l)}
+          packing={packing}
           onOpenLesson={(id) => void openLesson(id)}
           onRebuildLesson={(id) => void openLesson(id, true)}
           onClose={() => setPanel('none')}

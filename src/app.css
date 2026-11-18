@@ -223,3 +223,12 @@ body { background: var(--lb-bg); color: var(--lb-ink); font-family: system-ui, -
   position: fixed; z-index: 7; pointer-events: none; transform: translate(-50%, 30px); font-size: 12px; font-weight: 600;
   color: #166534; background: #dcfce7; border-radius: 999px; padding: 3px 9px; white-space: nowrap;
 }
+
+/* Boards panel: tick boards and lessons to download them together as one .zip */
+.lb-zipbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; margin: 4px 0 6px; border-radius: 10px; background: var(--lb-soft); }
+.lb-zipbar .lb-check { margin: 0; align-items: center; }
+.lb-zipbar .lb-btn:disabled { opacity: 0.5; cursor: default; }
+.lb-panel h3.lb-listhead { margin: 12px 0 4px; }
+.lb-listhead .lb-check { margin: 0; align-items: center; font-size: 14px; font-weight: 700; }
+.lb-tick { flex: none; width: 16px; height: 16px; margin: 0 2px 0 6px; cursor: pointer; accent-color: var(--lb-accent); }
+.lb-check input { accent-color: var(--lb-accent); }
